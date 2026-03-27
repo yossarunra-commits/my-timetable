@@ -41,9 +41,9 @@
             <a href="javascript:void(0)" onclick="showSection('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
             </a>
-            <a href="javascript:void(0)" onclick="showSection('teacher-schedule'); renderTeacherTable();" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 transition-all">
-                <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
-            </a>
+            <a href="javascript:void(0)" onclick="showTeacherScheduleSection()" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 transition-all">
+            <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
+        </a>
         </nav>
         <div class="p-4 text-xs text-slate-400 border-t border-slate-700">
             Version 1.0 (BETA)
@@ -330,6 +330,7 @@
 </section>
 
 <section id="teacher-schedule" class="content-section hidden bg-slate-50 min-h-screen py-10">
+    
     <div class="max-w-7xl mx-auto px-4">
         <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 print:hidden">
             <div>
@@ -345,16 +346,45 @@
                 <button onclick="exportTeacherTableToImage()" class="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:bg-slate-900 transition flex items-center gap-2">
                     <i class="fas fa-image"></i> ส่งออกเป็นรูปภาพ
                 </button>
+                <button onclick="exportAllTeacherTables()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:bg-emerald-700 transition flex items-center gap-2">
+                    <i class="fas fa-file-export"></i> ส่งออกตารางครูทุกคน (.zip)
+                </button>
             </div>
+            
         </div>
 
-        <div class="bg-white p-4 rounded-2xl shadow-sm border mb-6 flex items-center gap-4">
-            <span class="text-sm font-bold text-slate-500 uppercase tracking-wider">ค้นหาชื่อครู:</span>
-            <input type="text" id="teacher-name-input" oninput="renderTeacherTable()" 
-                   placeholder="พิมพ์ชื่อครู..." 
-                   class="border-2 border-slate-200 rounded-xl p-2 font-bold text-slate-700 focus:border-blue-500 outline-none w-64">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border mb-6 flex flex-wrap items-center gap-4 no-print">
+    <div class="flex-1 min-w-[300px]">
+        <label class="block text-xs font-black text-slate-400 uppercase mb-2">เลือกรายชื่อครู:</label>
+        <div class="relative">
+            <i class="fas fa-user-circle absolute left-4 top-3.5 text-slate-400"></i>
+            <select id="teacher-select" onchange="renderTeacherTable()" 
+                    class="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 focus:border-blue-500 outline-none transition-all appearance-none">
+                <option value="">-- กรุณาเลือกรายชื่อครู --</option>
+            </select>
         </div>
-
+    </div>
+</div>
+        <div class="flex justify-center gap-6 mb-6 no-print">
+    <div class="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+        <div class="bg-indigo-600 text-white w-12 h-12 rounded-xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-book-reader text-xl"></i>
+        </div>
+        <div>
+            <p class="text-xs font-black text-indigo-400 uppercase">ภาระการสอนทั้งหมด</p>
+            <p class="text-2xl font-black text-indigo-700"><span id="total-teaching-slots">0</span> <span class="text-sm">คาบ/สัปดาห์</span></p>
+        </div>
+    </div>
+    <div class="bg-emerald-50 border-2 border-emerald-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+        <div class="bg-emerald-600 text-white w-12 h-12 rounded-xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-clock text-xl"></i>
+        </div>
+        <div>
+            <p class="text-xs font-black text-emerald-400 uppercase">รวมเวลาสอนจริง</p>
+            <p class="text-2xl font-black text-emerald-700"><span id="total-teaching-hours">0</span> <span class="text-sm">ชม. <span id="total-teaching-mins">0</span> นาที / สัปดาห์</span></p>
+        </div>
+    </div>
+</div>
         <div id="teacher-print-area" class="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100">
             <div class="text-center mb-6 border-b-4 border-double border-slate-200 pb-6">
                 <h1 class="text-2xl font-black text-slate-900 uppercase tracking-wide">ตารางสอนครูรายบุคคล</h1>
@@ -473,6 +503,8 @@
                 nickname: cells[2].innerText.trim() 
             });
         }
+        // 🔥 เพิ่มบรรทัดนี้ลงไป เพื่อให้ Dropdown อัปเดตทันทีที่ดึงข้อมูลเสร็จ
+updateTeacherDropdown();    
     });
 
     // 2. ดึงข้อมูลวิชาจากตาราง
@@ -751,14 +783,6 @@ function confirmAssignment() {
         return;
     }
 
-    // 🔥 ระบบป้องกัน: เช็คว่าครูคนนี้ติดสอนห้องอื่นใน "วัน/เวลา" เดียวกันหรือไม่
-    const conflict = finalSchedule.find(s => s.day === day && s.period === currentEditing.period && s.teacher === teacher && s.room !== room);
-    
-    if (conflict) {
-        alert(`❌ ครู${teacher} มีสอนอยู่ที่ห้อง ${conflict.room} ในคาบที่ ${currentEditing.period} แล้ว!`);
-        return;
-    }
-
     // ลบข้อมูลเก่าในคาบนั้นออก (ถ้ามี) แล้วใส่ใหม่
     finalSchedule = finalSchedule.filter(s => !(s.room === room && s.day === day && s.period === currentEditing.period));
     
@@ -874,10 +898,6 @@ function confirmManualTimes() {
         const end = document.getElementById(`end-p-${i}`).value;
         const type = document.getElementById(`type-p-${i}`).value;
 
-        if (!start || !end) {
-            alert(`❌ กรุณากรอกเวลาคาบที่ ${i} ให้ครบถ้วน`);
-            return;
-        }
         currentConfig.push({ period: i, start, end, type });
     }
     
@@ -1136,63 +1156,177 @@ function showPreview() {
     renderPreviewTabs();
 }
 
+function showTeacherScheduleSection() {
+    // 1. สลับหน้าไปที่ตารางสอนครู
+    showSection('teacher-schedule'); 
+
+    // 2. 🔥 สำคัญมาก: สั่งรวบรวมรายชื่อครูจากตาราง Import มาเก็บใน appData.teachers ก่อน
+    collectTeacherData(); 
+
+    // 3. อัปเดตรายชื่อลงใน Dropdown
+    updateTeacherDropdown();
+}
+
+// ฟังก์ชันรวบรวมข้อมูลจากตาราง (อ้างอิงตามโค้ดที่คุณส่งมา)
+function collectTeacherData() {
+    appData.teachers = [];
+    const teacherRows = document.querySelectorAll("#teacherTable tbody tr");
+    teacherRows.forEach(tr => {
+        const cells = tr.querySelectorAll("td");
+        if(cells.length >= 3 && cells[0].innerText.trim() !== "") {
+            appData.teachers.push({ 
+                fname: cells[0].innerText.trim(), 
+                lname: cells[1].innerText.trim(), 
+                nickname: cells[2].innerText.trim() 
+            });
+        }
+    });
+}
+
+function updateTeacherDropdown() {
+    const select = document.getElementById('teacher-select');
+    if (!select) return;
+
+    // 1. ดึงชื่อจาก appData.teachers (ข้อมูลที่คุณดึงมาจากตาราง #teacherTable)
+    // ใช้ .fname ตามโครงสร้างที่คุณเขียนไว้
+    let namesFromImport = (appData.teachers || []).map(t => t.fname);
+
+    // 2. ดึงชื่อจากตารางที่จัดคาบสอนไว้แล้ว (finalSchedule) 
+    // เผื่อมีการพิมพ์ชื่อครูลงไปตรงๆ ในตารางสอน
+    let namesFromSchedule = (typeof finalSchedule !== 'undefined') 
+        ? finalSchedule.map(s => s.teacher ? s.teacher.trim() : "") 
+        : [];
+
+    // 3. รวมชื่อจากทั้ง 2 แหล่ง, ลบชื่อที่ซ้ำ, และเรียงลำดับ ก-ฮ
+    const allTeachers = [...new Set([...namesFromImport, ...namesFromSchedule])]
+                        .filter(n => n && n !== "" && n !== undefined)
+                        .sort((a, b) => a.localeCompare(b, 'th'));
+
+    // 4. สร้าง Option ให้เลือก
+    let options = '<option value="">-- กรุณาเลือกรายชื่อครู --</option>';
+    
+    if (allTeachers.length === 0) {
+        options = '<option value="">-- ไม่พบรายชื่อครู (กรุณานำเข้าข้อมูลก่อน) --</option>';
+    } else {
+        allTeachers.forEach(name => {
+            options += `<option value="${name}">${name}</option>`;
+        });
+    }
+    
+    select.innerHTML = options;
+}
+
 function renderTeacherTable() {
-    const teacherName = document.getElementById('teacher-name-input').value.trim();
+    // 1. เปลี่ยนจาก 'teacher-search-input' เป็น 'teacher-select' ให้ตรงกับ HTML ของคุณ
+    const teacherSelect = document.getElementById('teacher-select');
+    const selectedTeacher = teacherSelect ? teacherSelect.value.trim() : "";
+    
+    // 2. ตรวจสอบ ID ส่วนแสดงผล (ใน HTML ของคุณใช้ teacher-display-name)
     const displayName = document.getElementById('teacher-display-name');
     const header = document.getElementById('teacher-table-header');
     const body = document.getElementById('teacher-table-body');
+    
+    // Elements สำหรับสรุปผล (ที่คุณเพิ่มเข้าไปก่อนหน้านี้)
+    const totalSlotsEl = document.getElementById('total-teaching-slots');
+    const totalHoursEl = document.getElementById('total-teaching-hours');
+    const totalMinsEl = document.getElementById('total-teaching-mins');
 
-    if (!teacherName) {
-        displayName.innerText = "กรุณาระบุชื่อครู";
-        body.innerHTML = "";
+    if (!selectedTeacher) {
+        displayName.innerText = "กรุณาเลือกรายชื่อครู";
+        body.innerHTML = "<tr><td class='p-10 text-center text-slate-300 italic'>รอการเลือกรายชื่อ...</td></tr>";
+        header.innerHTML = "";
+        if(totalSlotsEl) totalSlotsEl.innerText = "0";
         return;
     }
 
-    displayName.innerText = "คุณครู" + teacherName;
+    // 3. กรองข้อมูลจาก finalSchedule
+    const teacherSchedules = finalSchedule.filter(s => s.teacher.trim() === selectedTeacher);
+    displayName.innerText = "คุณครู" + selectedTeacher;
 
-    // 1. ใช้โครงสร้างเวลาจาก ป.1 เป็นหลัก (หรือระดับที่ต้องการ)
-    const config = timeConfigsByLevel["ป.1"] || []; 
+    if (teacherSchedules.length === 0) {
+        body.innerHTML = "<tr><td class='p-10 text-center text-slate-400 font-bold'>ไม่พบภาระการสอนในระบบ</td></tr>";
+        header.innerHTML = "";
+        return;
+    }
+
+    // 4. คำนวณเวลาและรวบรวม Time Slots
+    let totalMinutes = 0;
+let timeSlots = [];
+
+teacherSchedules.forEach(s => {
+    const level = s.room.split('/')[0];
+    const config = timeConfigsByLevel[level] || [];
+    const slotDetail = config.find(c => c.period == s.period);
     
-    // 2. วาด Header (เวลา)
-    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-center text-xs font-black">วัน / เวลา</th>`;
-    config.forEach(slot => {
-        headerHtml += `
-            <th class="border-2 border-slate-300 p-2 text-center bg-amber-50 min-w-[100px]">
-                <div class="text-amber-700 font-black text-sm">${slot.start} - ${slot.end}</div>
-                <div class="text-[9px] text-slate-400 font-bold">${slot.type === 'break' ? 'พัก' : 'คาบ '+slot.period}</div>
-            </th>`;
+    if (slotDetail) {
+        // --- แก้ไขจุดนี้: ถ้านักเรียนมีวิชาเรียน (match) ให้นับเวลาทันที ---
+        const startArr = slotDetail.start.split(':').map(Number);
+        const endArr = slotDetail.end.split(':').map(Number);
+        const diff = (endArr[0] * 60 + endArr[1]) - (startArr[0] * 60 + startArr[1]);
+        
+        totalMinutes += diff;
+
+        timeSlots.push({
+            start: slotDetail.start,
+            end: slotDetail.end,
+            sortKey: parseInt(slotDetail.start.replace(':', ''))
+        });
+    }
+});
+
+// แสดงผลลัพธ์
+if(totalSlotsEl) totalSlotsEl.innerText = teacherSchedules.length;
+if(totalHoursEl) totalHoursEl.innerText = Math.floor(totalMinutes / 60);
+if(totalMinsEl) totalMinsEl.innerText = totalMinutes % 60;
+
+    // แสดงสรุปชั่วโมงสอน
+    if(totalSlotsEl) totalSlotsEl.innerText = teacherSchedules.length;
+    if(totalHoursEl) totalHoursEl.innerText = Math.floor(totalMinutes / 60);
+    if(totalMinsEl) totalMinsEl.innerText = totalMinutes % 60;
+
+    // 5. จัดการหัวตาราง (Unique Time)
+    timeSlots.sort((a, b) => a.sortKey - b.sortKey);
+    const uniqueSlots = [];
+    const map = new Map();
+    for (const item of timeSlots) {
+        const key = item.start + "-" + item.end;
+        if(!map.has(key)){
+            map.set(key, true);
+            uniqueSlots.push(item);
+        }
+    }
+
+    // วาด Header
+    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-[10px] font-black w-24">วัน / เวลา</th>`;
+    uniqueSlots.forEach(slot => {
+        headerHtml += `<th class="border-2 border-slate-300 p-2 text-center bg-indigo-50 min-w-[120px] text-indigo-700 font-black text-xs">${slot.start} - ${slot.end}</th>`;
     });
     header.innerHTML = headerHtml;
 
-    // 3. วาดตาราง 5 วัน
+    // 6. วาดตาราง 5 วัน
     const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
     body.innerHTML = "";
-
     days.forEach(dayName => {
         const tr = document.createElement('tr');
         tr.className = "h-24";
-        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50 text-slate-700">${dayName}</td>`;
+        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50 text-slate-500 text-xs">${dayName}</td>`;
 
-        config.forEach(slot => {
-            if (slot.type === 'break') {
-                rowHtml += `<td class="border-2 border-slate-300 bg-orange-50/10 text-center uppercase text-[9px] font-bold text-orange-300">พัก</td>`;
+        uniqueSlots.forEach(slot => {
+            const match = teacherSchedules.find(s => {
+                const level = s.room.split('/')[0];
+                const config = timeConfigsByLevel[level] || [];
+                const d = config.find(c => c.period == s.period);
+                return s.day === dayName && d && d.start === slot.start && d.end === slot.end;
+            });
+
+            if (match) {
+                rowHtml += `
+                    <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white shadow-sm">
+                        <div class="font-black text-indigo-900 text-sm leading-tight">${match.subject}</div>
+                        <div class="mt-2 inline-block px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">ห้อง ${match.room}</div>
+                    </td>`;
             } else {
-                // ค้นหาวิชาที่ครูคนนี้สอนในวันและคาบนั้นๆ
-                const match = finalSchedule.find(s => 
-                    s.teacher === teacherName && 
-                    s.day === dayName && 
-                    s.period === slot.period
-                );
-
-                if (match) {
-                    rowHtml += `
-                        <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white">
-                            <div class="font-black text-slate-800 text-sm leading-tight">${match.subject}</div>
-                            <div class="text-[10px] font-bold text-green-600 mt-2 uppercase">ห้อง ${match.room}</div>
-                        </td>`;
-                } else {
-                    rowHtml += `<td class="border-2 border-slate-300 p-2 bg-white/50"></td>`;
-                }
+                rowHtml += `<td class="border-2 border-slate-300 bg-slate-50/20"></td>`;
             }
         });
         tr.innerHTML = rowHtml;
@@ -1200,17 +1334,112 @@ function renderTeacherTable() {
     });
 }
 
-// ฟังก์ชันส่งออกเป็นรูปภาพสำหรับครู
+function showTeacherSchedule() {
+    showSection('teacher-schedule');
+    // อัปเดตรายชื่ออีกครั้งเพื่อความแน่ใจ
+    updateTeacherDropdown();
+}
 function exportTeacherTableToImage() {
+    // 1. ดึง Element ที่ต้องการจะถ่ายรูป
     const element = document.getElementById('teacher-print-area');
-    const teacherName = document.getElementById('teacher-name-input').value || 'ครู';
+    
+    // ดึงชื่อครูมาตั้งชื่อไฟล์
+    const teacherSelect = document.getElementById('teacher-select');
+    const teacherName = teacherSelect ? teacherSelect.value : "ครู";
 
-    html2canvas(element, { scale: 2 }).then(canvas => {
+    if (!element) {
+        alert("ไม่พบพื้นที่ตารางที่จะส่งออก (ID: teacher-print-area)");
+        return;
+    }
+
+    console.log("กำลังเตรียมส่งออกรูปภาพสำหรับ:", teacherName);
+
+    // 2. ใช้ html2canvas แปลง HTML เป็น Canvas
+    html2canvas(element, {
+        scale: 2, // เพิ่มความชัด 2 เท่า
+        useCORS: true, // รองรับรูปภาพข้าม Domain (ถ้ามี)
+        backgroundColor: "#ffffff" // พื้นหลังสีขาว
+    }).then(canvas => {
+        // 3. แปลงเป็นลิงก์และสั่ง Download
         const link = document.createElement('a');
         link.download = `ตารางสอน_ครู${teacherName}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
+        
+        console.log("ส่งออกรูปภาพสำเร็จ!");
+    }).catch(err => {
+        console.error("เกิดข้อผิดพลาดในการส่งออก:", err);
+        alert("ไม่สามารถสร้างรูปภาพได้ กรุณาลองใหม่อีกครั้ง");
     });
+}
+async function exportAllTeacherTables() {
+    const teacherSelect = document.getElementById('teacher-select');
+    const options = Array.from(teacherSelect.options).filter(opt => opt.value !== "");
+
+    if (options.length === 0) {
+        alert("ไม่พบรายชื่อครูในระบบ");
+        return;
+    }
+
+    if (!confirm(`ระบบกำลังจะส่งออกตารางสอนครูจำนวน ${options.length} ท่าน\nกรุณารอสักครู่จนกว่าจะครบทุกไฟล์`)) return;
+
+    // วนลูปรายชื่อครูทุกคน
+    for (let i = 0; i < options.length; i++) {
+        const teacherName = options[i].value;
+        
+        // 1. เปลี่ยนชื่อใน Dropdown และวาดตารางใหม่
+        teacherSelect.value = teacherName;
+        renderTeacherTable();
+
+        // 2. รอให้ตารางวาดเสร็จเล็กน้อย (ป้องกันรูปว่าง)
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 3. สั่งถ่ายรูป
+        const element = document.getElementById('teacher-print-area');
+        const canvas = await html2canvas(element, { scale: 2 });
+        
+        // 4. สั่งดาวน์โหลด
+        const link = document.createElement('a');
+        link.download = `ตารางสอน_${teacherName}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+
+        // หน่วงเวลาเล็กน้อยก่อนคนถัดไป เพื่อป้องกัน Browser ค้าง
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
+    alert("ส่งออกข้อมูลครบถ้วนแล้ว!");
+}
+
+// --- ฟังก์ชันส่งออกตารางครูทุกคน ---
+async function exportAllTeacherTables() {
+    const teacherSelect = document.getElementById('teacher-select');
+    const options = Array.from(teacherSelect.options).filter(opt => opt.value !== "");
+
+    if (options.length === 0) return alert("ไม่พบรายชื่อครู");
+    if (!confirm(`ระบบจะดาวน์โหลดตารางสอนครูจำนวน ${options.length} ท่าน`)) return;
+
+    for (const option of options) {
+        teacherSelect.value = option.value;
+        renderTeacherTable(); // ฟังก์ชันที่เราทำไว้ก่อนหน้านี้
+        
+        await new Promise(r => setTimeout(r, 800));
+
+        const element = document.getElementById('teacher-print-area');
+        if (element) {
+            await downloadCanvas(element, `ตารางสอน_ครู${option.value}`);
+        }
+    }
+    alert("ดาวน์โหลดตารางสอนครูครบทุกคนแล้ว");
+}
+
+// --- ฟังก์ชันกลางสำหรับดาวน์โหลดรูป ---
+async function downloadCanvas(element, fileName) {
+    const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#ffffff" });
+    const link = document.createElement('a');
+    link.download = `${fileName}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
 }
 
     </script>
