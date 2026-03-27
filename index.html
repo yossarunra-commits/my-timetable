@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการตารางสอน - Smart Timetable</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .active-menu { background-color: #3b82f6 !important; border-right: 4px solid white; }
+        .table-container { max-height: 400px; overflow-y: auto; }
+        [contenteditable="true"]:focus { outline: 2px solid #3b82f6; background: #f0f7ff; }
+    
+    @media screen {
+    #print-area {
+        /* ป้องกันขอบมนหรือเงาแปลกๆ ตอนถ่ายรูป */
+        box-shadow: none !important; 
+    }
+}
+    </style>
+    
+</head>
+<body class="bg-gray-100 flex h-screen overflow-hidden">
+
+    <aside class="w-64 bg-slate-800 text-white flex flex-col shadow-xl">
+        <div class="p-6 text-center border-b border-slate-700">
+            <h1 class="text-xl font-bold italic text-blue-400"><i class="fas fa-calendar-alt mr-2"></i>PSV</h1>
+        </div>
+        <nav class="flex-1 mt-4">
+            <a href="javascript:void(0)" onclick="showSection('section-import')" id="menu-section-import" class="sidebar-item active-menu flex items-center p-4 transition-all">
+                <i class="fas fa-file-import w-8 text-lg"></i> <span> นำเข้าข้อมูล</span>
+            </a>
+            <a href="javascript:void(0)" onclick="showSection('schedule')" id="menu-schedule" class="sidebar-item flex items-center p-4 transition-all">
+                <i class="fas fa-clock w-8 text-lg"></i> <span>จัดตารางเวลา</span>
+            </a>
+            <a href="javascript:void(0)" onclick="showSection('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
+                <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
+            </a>
+            <a href="javascript:void(0)" onclick="showSection('teacher-schedule'); renderTeacherTable();" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 transition-all">
+                <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
+            </a>
+        </nav>
+        <div class="p-4 text-xs text-slate-400 border-t border-slate-700">
+            Version 1.0 (BETA)
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto p-8 h-screen">
+        
+        <section id="section-import" class="content-section">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">⚙️ ตั้งค่าข้อมูลเริ่มต้น</h2>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-blue-600"><i class="fas fa-user-tie mr-2"></i>รายชื่อครู</h3>
+                            <button onclick="downloadTemplate('teacher')" class="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded">Template</button>
+                        </div>
+                        <input type="file" id="teacherFile" class="text-sm mb-3 block w-full">
+                        <div class="table-container border rounded">
+                            <table class="w-full text-sm" id="teacherTable">
+                                <thead class="bg-gray-50 uppercase">
+                                    <tr><th class="p-2 border">ชื่อ</th><th class="p-2 border">นามสกุล</th><th class="p-2 border">ชื่อเล่น</th><th class="p-2 border">#</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <button onclick="addRow('teacherTable', 3)" class="mt-3 text-xs text-blue-500 font-bold">+ เพิ่มครูใหม่</button>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-green-600"><i class="fas fa-book mr-2"></i>วิชาหลักและชมรม</h3>
+                            <button onclick="downloadTemplate('subject')" class="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded">Template</button>
+                        </div>
+                        <input type="file" id="subjectFile" class="text-sm mb-3 block w-full">
+                        <div class="table-container border rounded">
+                            <table class="w-full text-sm" id="subjectTable">
+                                <thead class="bg-gray-50">
+                                    <tr><th class="p-2 border">วิชา/ชมรม</th><th class="p-2 border">ประเภท</th><th class="p-2 border">#</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <button onclick="addRow('subjectTable', 2)" class="mt-3 text-xs text-green-500 font-bold">+ เพิ่มวิชาใหม่</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-sm border mb-8">
+                    <h3 class="font-bold text-orange-600 mb-4"><i class="fas fa-school mr-2"></i>จำนวนห้องเรียนต่อชั้น</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4" id="roomContainer">
+                        </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="schedule" class="content-section hidden">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+                <h2 class="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
+                    <span class="bg-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-200">
+                        <i class="fas fa-clock text-xl"></i>
+                    </span>
+                    ตั้งค่าเวลาและจัดคาบสอน
+                </h2>
+                <p class="text-slate-500 mt-1 ml-14 text-sm">กำหนดโครงสร้างเวลาเรียนและจัดตารางรายวิชาสำหรับแต่ละห้อง</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <div class="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-slate-700 mb-6 flex items-center gap-2 text-lg">
+                        <i class="fas fa-cog text-blue-500"></i> ตั้งค่าโครงสร้างเวลา
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-3">1. เลือกระดับชั้น</label>
+                            <div id="level-checkbox-group" class="grid grid-cols-3 gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.1" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.1</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.2" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.2</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.3" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.3</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.4" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.4</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.5" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.5</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ป.6" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ป.6</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ม.1" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ม.1</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ม.2" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ม.2</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-xs font-semibold cursor-pointer group">
+                                    <input type="checkbox" value="ม.3" class="level-chk w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="group-hover:text-blue-600 transition">ม.3</span>
+                                </label>
+                            </div>
+                            <div class="mt-2 flex justify-end gap-3 px-1">
+                                <button onclick="selectAllLevels(true)" class="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition uppercase tracking-tighter">เลือกทั้งหมด</button>
+                                <button onclick="selectAllLevels(false)" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 transition uppercase tracking-tighter">ล้าง</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-2">2. จำนวนคาบต่อวัน</label>
+                            <div class="flex gap-2">
+                                <input type="number" id="periodCount" value="8" min="1" class="flex-1 bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-slate-700 outline-none transition">
+                                <button onclick="generateManualFields()" class="bg-slate-800 text-white px-5 rounded-xl font-bold text-xs hover:bg-slate-900 transition-all active:scale-95 shadow-md">
+                                    สร้างช่องกรอก
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="manualInputContainer" class="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar border-t border-slate-100 pt-4">
+                            <div class="text-center py-10 opacity-40">
+                                <i class="fas fa-keyboard text-4xl mb-2"></i>
+                                <p class="text-[10px] font-bold uppercase">รอสร้างช่องกรอกเวลา...</p>
+                            </div>
+                        </div>
+
+                        <button onclick="confirmManualTimes()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:translate-y-0">
+                            บันทึกโครงสร้างเวลาเรียน
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-6">
+                <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-[2rem] shadow-xl shadow-blue-100">
+                    <div class="bg-white p-6 rounded-[1.8rem] grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-door-open text-blue-500"></i> 1. เลือกห้องเรียน
+                            </label>
+                            <select id="assign-room" onchange="updatePeriodView()" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-blue-700 outline-none"></select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-calendar-day text-blue-500"></i> 2. เลือกวันสอน
+                            </label>
+                            <select id="assign-day" onchange="updatePeriodView()" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-slate-700 outline-none">
+                                <option value="จันทร์">วันจันทร์</option>
+                                <option value="อังคาร">วันอังคาร</option>
+                                <option value="พุธ">วันพุธ</option>
+                                <option value="พฤหัสบดี">วันพฤหัสบดี</option>
+                                <option value="ศุกร์">วันศุกร์</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                        <h4 class="text-sm font-black text-slate-600 uppercase tracking-widest">ตารางแสดงผลรายคาบ</h4>
+                        <span class="text-[10px] bg-white px-3 py-1 rounded-full border border-slate-200 font-bold text-slate-400 uppercase">Live View</span>
+                    </div>
+                    <div id="period-grid" class="p-6 space-y-3 min-h-[400px]">
+                        <div class="flex flex-col items-center justify-center py-20 opacity-30">
+                            <i class="fas fa-th-list text-6xl mb-4"></i>
+                            <p class="font-bold uppercase tracking-widest">กรุณาเลือกห้องเรียนเพื่อจัดการ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-4">
+                    <button onclick="showPreview()" class="group bg-green-500 text-white px-8 py-4 rounded-2xl font-black text-sm shadow-xl shadow-green-100 hover:bg-green-600 hover:scale-105 transition-all flex items-center gap-3">
+                        ดูตารางสอนรวมสรุปผล 
+                        <i class="fas fa-chevron-right group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="assign-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 transition-all">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 border border-white/20">
+            <div class="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-black text-slate-800 text-xl" id="modal-title">จัดวิชาลงคาบ</h3>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-tighter" id="modal-subtitle">ข้อมูลรายวิชาและผู้จัดการสอน</p>
+                </div>
+                <button onclick="closeModal()" class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-8 space-y-6">
+                <div class="space-y-2">
+                    <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">วิชาที่สอน</label>
+                    <select id="assign-subject" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-4 rounded-2xl font-bold text-slate-700 outline-none transition"></select>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">ครูผู้สอน</label>
+                    <select id="assign-teacher" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-4 rounded-2xl font-bold text-slate-700 outline-none transition"></select>
+                </div>
+                
+                <div class="pt-4">
+                    <button onclick="confirmAssignment()" class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-sm shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+                        บันทึกลงตารางสอน
+                    </button>
+                    <p class="text-[10px] text-center text-slate-400 mt-4 font-medium uppercase tracking-widest">ระบบจะตรวจสอบการสอนซ้ำโดยอัตโนมัติ</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="preview" class="content-section hidden bg-slate-50 min-h-screen py-10 print:bg-white print:py-0">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 print:hidden">
+            <div>
+                <h2 class="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
+                    <span class="bg-green-600 text-white p-2 rounded-xl shadow-lg">
+                        <i class="fas fa-table text-xl"></i>
+                    </span>
+                    สรุปผลตารางเรียน
+                </h2>
+                <p class="text-slate-500 mt-1 ml-14 text-sm">ตรวจสอบความถูกต้องและพิมพ์ตารางสอนรายห้อง</p>
+            </div>
+            
+            <div class="flex gap-2">
+                <button onclick="exportScheduleToExcel()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:bg-emerald-700 transition flex items-center gap-2">
+                    <i class="fas fa-file-excel"></i> Excel
+                </button>
+                <button onclick="exportTableToImage()" class="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:bg-slate-900 transition flex items-center gap-2 no-print">
+                <i class="fas fa-image"></i> ส่งออกเป็นรูปภาพ
+            </button>
+            </div>
+        </div>
+<div class="bg-white p-4 rounded-2xl shadow-sm border mb-6 space-y-4 no-print">
+    <div class="flex items-center gap-4">
+        <span class="text-sm font-bold text-slate-500 uppercase tracking-wider">เลือกห้องเรียน:</span>
+        <select id="preview-room-select" onchange="renderMasterTable()" class="border-2 border-slate-200 rounded-xl p-2 font-bold text-slate-700 focus:border-blue-500 outline-none">
+            <option value="">-- เลือกห้องเรียน --</option>
+        </select>
+</div>
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100 print:shadow-none print:p-0 print:border-0">
+            
+            <div class="text-center mb-6 border-b-4 border-double border-slate-200 pb-6">
+                <h1 class="text-2xl font-black text-slate-900 uppercase tracking-wide">ตารางเรียนรายสัปดาห์</h1>
+                <div id="full-room-title" class="text-xl font-bold text-blue-600 mt-2">
+                    </div>
+                <p class="text-slate-500 font-bold mt-1">ปีการศึกษา 2569</p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse border-2 border-slate-300" id="master-table">
+                    <thead>
+                        <tr id="table-header" class="bg-slate-50">
+                            </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        </tbody>
+                </table>
+            </div>
+
+            
+        </div>
+    </div>
+</section>
+
+<section id="teacher-schedule" class="content-section hidden bg-slate-50 min-h-screen py-10">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 print:hidden">
+            <div>
+                <h2 class="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
+                    <span class="bg-blue-600 text-white p-2 rounded-xl shadow-lg">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                    </span>
+                    ตารางสอนรายบุคคล (ครู)
+                </h2>
+            </div>
+            
+            <div class="flex gap-2">
+                <button onclick="exportTeacherTableToImage()" class="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:bg-slate-900 transition flex items-center gap-2">
+                    <i class="fas fa-image"></i> ส่งออกเป็นรูปภาพ
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl shadow-sm border mb-6 flex items-center gap-4">
+            <span class="text-sm font-bold text-slate-500 uppercase tracking-wider">ค้นหาชื่อครู:</span>
+            <input type="text" id="teacher-name-input" oninput="renderTeacherTable()" 
+                   placeholder="พิมพ์ชื่อครู..." 
+                   class="border-2 border-slate-200 rounded-xl p-2 font-bold text-slate-700 focus:border-blue-500 outline-none w-64">
+        </div>
+
+        <div id="teacher-print-area" class="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100">
+            <div class="text-center mb-6 border-b-4 border-double border-slate-200 pb-6">
+                <h1 class="text-2xl font-black text-slate-900 uppercase tracking-wide">ตารางสอนครูรายบุคคล</h1>
+                <div id="teacher-display-name" class="text-xl font-bold text-blue-600 mt-2">กรุณาระบุชื่อครู</div>
+                <p class="text-slate-500 font-bold mt-1">ปีการศึกษา 2569</p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse border-2 border-slate-300">
+                    <thead>
+                        <tr id="teacher-table-header" class="bg-slate-50">
+                            </tr>
+                    </thead>
+                    <tbody id="teacher-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+
+    </main>
+
+    <script>
+        // ข้อมูลหลัก
+        let appData = { teachers: [], subjects: [], rooms: {} };
+
+        // ฟังก์ชันสลับหน้า (Tabs)
+        function showSection(sectionId) {
+    // 1. ซ่อนทุก Section
+    document.querySelectorAll('.content-section').forEach(s => s.classList.add('hidden'));
+    
+    // 2. ลบสีไฮไลท์ Sidebar ทุกอัน
+    document.querySelectorAll('.sidebar-item').forEach(m => m.classList.remove('active-menu', 'bg-blue-600', 'text-white'));
+
+    // 3. แสดง Section ที่เลือก
+    const target = document.getElementById(sectionId);
+    if (target) {
+        target.classList.remove('hidden');
+        // ใส่สีไฮไลท์ให้เมนู (หา id menu-...)
+        const menuBtn = document.getElementById('menu-' + sectionId) || document.getElementById('menu-section-' + sectionId.replace('section-',''));
+        if(menuBtn) menuBtn.classList.add('active-menu', 'bg-blue-600', 'text-white');
+    }
+
+    // 4. Logic พิเศษ: ถ้าเข้าหน้าตารางเวลา ให้ดึงข้อมูลมาแสดงด้วย
+    if (sectionId === 'schedule') {
+        saveAllData();      // ดึงข้อมูลครู/ห้อง ที่กรอกไว้หน้าแรกมาเก็บ
+        refreshDropdowns(); // เอาชื่อครู/ห้อง ไปใส่ใน Select
+    }
+}
+
+        // --- Logic จากโค้ดเดิมที่ปรับปรุงแล้ว ---
+
+        function setupFileListener(id, tableId) {
+            document.getElementById(id).addEventListener('change', function(e) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                    const tbody = document.querySelector(`#${tableId} tbody`);
+                    tbody.innerHTML = "";
+                    for(let i = 1; i < data.length; i++) {
+                        if(data[i].length > 0) renderRow(tableId, data[i]);
+                    }
+                };
+                reader.readAsBinaryString(e.target.files[0]);
+            });
+        }
+
+        function renderRow(tableId, rowData) {
+            const tbody = document.querySelector(`#${tableId} tbody`);
+            const tr = document.createElement('tr');
+            rowData.forEach(cell => {
+                const td = document.createElement('td');
+                td.className = "p-2 border";
+                td.contentEditable = true;
+                td.innerText = cell || "";
+                tr.appendChild(td);
+            });
+            const delTd = document.createElement('td');
+            delTd.className = "p-2 border text-center";
+            delTd.innerHTML = `<button onclick="this.parentElement.parentElement.remove()" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>`;
+            tr.appendChild(delTd);
+            tbody.appendChild(tr);
+        }
+
+        function addRow(tableId, cols) {
+            renderRow(tableId, new Array(cols).fill(""));
+        }
+
+        function initRooms() {
+            const container = document.getElementById('roomContainer');
+            const levels = ['P1','P2','P3','P4','P5','P6','M1','M2','M3','M4','M5','M6'];
+            const labels = ['ป.1','ป.2','ป.3','ป.4','ป.5','ป.6','ม.1','ม.2','ม.3','ม.4','ม.5','ม.6'];
+            levels.forEach((lvl, i) => {
+                container.innerHTML += `
+                    <div class="bg-gray-50 p-2 rounded border">
+                        <label class="block text-[10px] uppercase text-gray-500 font-bold">${labels[i]}</label>
+                        <input type="number" id="room-${lvl}" value="0" min="0" class="w-full bg-transparent font-bold text-center">
+                    </div>`;
+            });
+        }
+
+       function saveAllData() {
+    // 1. ดึงข้อมูลครูจากตาราง (Table to Array)
+    appData.teachers = [];
+    const teacherRows = document.querySelectorAll("#teacherTable tbody tr");
+    teacherRows.forEach(tr => {
+        const cells = tr.querySelectorAll("td");
+        if(cells.length >= 3 && cells[0].innerText.trim() !== "") {
+            appData.teachers.push({ 
+                fname: cells[0].innerText.trim(), 
+                lname: cells[1].innerText.trim(), 
+                nickname: cells[2].innerText.trim() 
+            });
+        }
+    });
+
+    // 2. ดึงข้อมูลวิชาจากตาราง
+    appData.subjects = [];
+    const subjectRows = document.querySelectorAll("#subjectTable tbody tr");
+    subjectRows.forEach(tr => {
+        const cells = tr.querySelectorAll("td");
+        if(cells.length >= 2 && cells[0].innerText.trim() !== "") {
+            appData.subjects.push({ 
+                name: cells[0].innerText.trim(), 
+                type: cells[1].innerText.trim() 
+            });
+        }
+    });
+
+    // 3. ดึงจำนวนห้องเรียน
+    const levels = ['P1','P2','P3','P4','P5','P6','M1','M2','M3','M4','M5','M6'];
+    levels.forEach(lvl => {
+        const input = document.getElementById(`room-${lvl}`);
+        if(input) appData.rooms[lvl] = parseInt(input.value) || 0;
+    });
+
+    console.log("Data sync completed:", appData);
+    
+    // 4. อัปเดต Dropdown ในหน้าถัดไปทันที
+    refreshDropdowns();
+    
+    // 5. สลับหน้าไปยัง 'จัดตารางเวลา' (Section 4-5)
+    // ซ่อนทุกหน้าก่อน
+    document.querySelectorAll('.content-section').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.sidebar-item').forEach(m => m.classList.remove('active-menu', 'bg-blue-600', 'text-white'));
+    
+    // แสดงหน้า schedule (ต้องชื่อเดียวกับ id ใน tag <section>)
+    const scheduleSection = document.getElementById('schedule');
+    const scheduleMenu = document.getElementById('menu-schedule');
+
+    if (scheduleSection) {
+        scheduleSection.classList.remove('hidden');
+    } else {
+        console.error("หา id='schedule' ไม่เจอ กรุณาเช็คใน HTML");
+    }
+
+    if (scheduleMenu) {
+        scheduleMenu.classList.add('active-menu', 'bg-blue-600', 'text-white');
+    }
+} // ปิดฟังก์ชัน saveAllData
+
+        // เริ่มต้น
+        setupFileListener('teacherFile', 'teacherTable');
+        setupFileListener('subjectFile', 'subjectTable');
+        initRooms();
+
+        // ตัวแปรเก็บตารางสอนที่บันทึก
+let rawSchedule = []; 
+
+// ฟังก์ชันสร้างคาบเวลา (ข้อ 4)
+function generateTimeSlots() {
+    const start = document.getElementById('startTime').value;
+    const dur = parseInt(document.getElementById('duration').value);
+    const count = parseInt(document.getElementById('periodCount').value);
+    const preview = document.getElementById('timeSlotPreview');
+    const periodSelector = document.getElementById('period-selector');
+    
+    preview.innerHTML = '<p class="text-xs font-bold text-blue-500">ติ๊กถูกหน้าคาบที่เป็น "เวลาพัก"</p>';
+    periodSelector.innerHTML = '';
+    
+    let currentTime = new Date(`2026-01-01T${start}`);
+
+    for (let i = 1; i <= count; i++) {
+        let startTimeStr = currentTime.toTimeString().substring(0, 5);
+        currentTime.setMinutes(currentTime.getMinutes() + dur);
+        let endTimeStr = currentTime.toTimeString().substring(0, 5);
+        
+        // ส่วนจัดการเวลาพักในข้อ 4
+        preview.innerHTML += `
+            <div class="flex items-center justify-between p-2 border-b text-sm">
+                <span>คาบที่ ${i} (${startTimeStr} - ${endTimeStr})</span>
+                <input type="checkbox" id="break-${i}" class="w-4 h-4">
+            </div>`;
+            
+        // ส่วนปุ่มเลือกคาบในข้อ 5
+        periodSelector.innerHTML += `
+            <button onclick="selectPeriod(this, ${i})" class="period-btn border px-3 py-1 rounded hover:bg-blue-100" data-period="${i}">
+                คาบ ${i}
+            </button>`;
+    }
+}
+
+// ฟังก์ชันดึงข้อมูลจากข้อ 1-3 มาใส่ใน Select (เรียกเมื่อสลับหน้า)
+function refreshDropdowns() {
+    const roomSelect = document.getElementById('assign-room');
+    const teacherSelect = document.getElementById('assign-teacher'); // เพิ่ม
+    const subjectSelect = document.getElementById('assign-subject'); // เพิ่ม
+    
+    if (!roomSelect) return;
+
+    // --- ส่วนที่ 1: จัดการห้องเรียน (โค้ดเดิมของคุณ) ---
+    roomSelect.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>';
+    const ThaiNames = { 
+        'P1':'ป.1', 'P2':'ป.2', 'P3':'ป.3', 'P4':'ป.4', 'P5':'ป.5', 'P6':'ป.6', 
+        'M1':'ม.1', 'M2':'ม.2', 'M3':'ม.3' 
+    };
+
+    for (let lvl in appData.rooms) {
+        let count = appData.rooms[lvl];
+        for (let i = 1; i <= count; i++) {
+            let opt = document.createElement('option');
+            let levelName = ThaiNames[lvl] || lvl; 
+            opt.value = `${levelName}/${i}`; 
+            opt.textContent = `ชั้น ${levelName} ห้อง ${i}`;
+            roomSelect.appendChild(opt);
+        }
+    }
+
+    // --- ส่วนที่ 2: จัดการรายชื่อครู (เพิ่มใหม่) ---
+    if (teacherSelect) {
+        teacherSelect.innerHTML = '<option value="">-- เลือกครูผู้สอน --</option>';
+        appData.teachers.forEach(t => {
+            let opt = document.createElement('option');
+            // ใช้ชื่อจริงเป็น Value และแสดง ชื่อจริง (ชื่อเล่น)
+            opt.value = t.fname; 
+            opt.textContent = `${t.fname} (${t.nickname})`;
+            teacherSelect.appendChild(opt);
+        });
+    }
+
+    // --- ส่วนที่ 3: จัดการรายวิชา (เพิ่มใหม่) ---
+    if (subjectSelect) {
+        subjectSelect.innerHTML = '<option value="">-- เลือกวิชา --</option>';
+        appData.subjects.forEach(s => {
+            let opt = document.createElement('option');
+            opt.value = s.name;
+            opt.textContent = s.name;
+            subjectSelect.appendChild(opt);
+        });
+    }
+}
+
+        let selectedPeriod = null;
+        function selectPeriod(btn, p) {
+            document.querySelectorAll('.period-btn').forEach(b => b.classList.replace('bg-blue-500', 'bg-white'));
+            document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('text-white'));
+            btn.classList.replace('bg-white', 'bg-blue-500');
+            btn.classList.add('text-white');
+            selectedPeriod = p;
+        }
+
+
+let timeConfig = []; // เก็บเวลา Start-End ของแต่ละคาบ
+let roomSettings = {}; // เก็บข้อมูลว่าห้องไหน คาบไหน "เป็นเวลาพัก"
+let currentSelectedPeriod = null;
+
+// ฟังก์ชันสร้างคาบเวลา (Global)
+function generateTimeSlots() {
+    const start = document.getElementById('startTime').value;
+    const dur = parseInt(document.getElementById('duration').value);
+    const count = parseInt(document.getElementById('periodCount').value);
+    const listDiv = document.getElementById('timeSlotList');
+    
+    timeConfig = [];
+    listDiv.innerHTML = "";
+    let currentTime = new Date(`2000-01-01T${start}`);
+
+    for (let i = 1; i <= count; i++) {
+        let sStr = currentTime.toTimeString().substring(0, 5);
+        currentTime.setMinutes(currentTime.getMinutes() + dur);
+        let eStr = currentTime.toTimeString().substring(0, 5);
+        
+        timeConfig.push({ period: i, start: sStr, end: eStr });
+        listDiv.innerHTML += `
+            <div class="text-xs p-2 bg-gray-100 rounded flex justify-between">
+                <span class="font-bold text-gray-600">คาบที่ ${i}</span>
+                <span>${sStr} - ${eStr} น.</span>
+            </div>`;
+    }
+    updatePeriodView(); // อัปเดตหน้าจัดการคาบ
+}
+
+// 1. ฟังก์ชันแสดงคาบเรียน (ปรับปรุงใหม่ให้แสดงวิชาที่บันทึกแล้วด้วย)
+// ตัวแปรหลักสำหรับเก็บตารางสอนทั้งหมด
+let finalSchedule = []; 
+let currentEditing = { period: null }; 
+
+// 1. ฟังก์ชันแสดงรายการคาบเรียน (ฝั่งขวา)
+function updatePeriodView() {
+    const roomFull = document.getElementById('assign-room').value; // ค่าคือ "ป.1/1"
+    const day = document.getElementById('assign-day').value;       // ค่าคือ "วันจันทร์"
+    const grid = document.getElementById('period-grid');
+    
+    if (!roomFull || !day) return;
+
+    grid.innerHTML = "";
+    const level = roomFull.split('/')[0]; // ดึง "ป.1"
+    const config = timeConfigsByLevel[level];
+
+    if (!config) {
+        grid.innerHTML = `<p class="text-center py-10 text-gray-400">ยังไม่ได้ตั้งเวลาของ ${level}</p>`;
+        return;
+    }
+
+    config.forEach(item => {
+        // ค้นหาข้อมูลจาก Array ใหญ่ที่เพิ่งบันทึกไป
+        const saved = finalSchedule.find(s => 
+            s.room === roomFull && 
+            s.day === day && 
+            s.period === item.period
+        );
+
+        const isRest = (item.type !== 'teach');
+        const row = document.createElement('div');
+        
+        // ปรับแต่งการแสดงผลถ้ามีข้อมูล (Saved)
+        row.className = `flex items-center justify-between p-4 rounded-2xl border mb-2 transition-all ${
+            saved ? 'bg-blue-50 border-blue-200 shadow-sm' : (isRest ? 'bg-gray-50' : 'bg-white border-gray-100')
+        }`;
+        
+        row.innerHTML = `
+            <div class="flex items-center gap-4">
+                <div class="text-xl font-black ${saved ? 'text-blue-600' : 'text-gray-300'} w-8">${item.period}</div>
+                <div>
+                    <div class="text-[10px] font-bold text-gray-400">${item.start} - ${item.end} น.</div>
+                    <div class="font-bold text-slate-700">
+                        ${isRest ? '<span class="text-orange-400">☕ พักเบรก</span>' : 
+                          (saved ? `<span class="text-blue-700">${saved.subject}</span> <span class="text-slate-400 text-sm ml-2">👤 ครู${saved.teacher}</span>` : 'ว่าง / ยังไม่ได้จัดวิชา')}
+                    </div>
+                </div>
+            </div>
+            ${isRest ? '' : `
+                <button onclick="openAssignModal(${item.period})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    saved ? 'bg-amber-500 text-white shadow-md' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
+                }">
+                    ${saved ? 'แก้ไข' : '+ เลือกสอน'}
+                </button>
+            `}
+        `;
+        grid.appendChild(row);
+    });
+}
+
+// 2. เปิด Modal เพื่อเลือกวิชา/ครู
+function openAssignModal(period) {
+    currentEditing.period = period;
+    document.getElementById('modal-title').innerText = `จัดวิชา คาบที่ ${period}`;
+    
+    // ดึงข้อมูลเดิมมาโชว์ (ถ้ามี)
+    const room = document.getElementById('assign-room').value;
+    const day = document.getElementById('assign-day').value;
+    const saved = finalSchedule.find(s => s.room === room && s.day === day && s.period === period);
+    
+    if(saved) {
+        document.getElementById('assign-subject').value = saved.subject;
+        document.getElementById('assign-teacher').value = saved.teacher;
+    } else {
+        document.getElementById('assign-subject').value = "";
+        document.getElementById('assign-teacher').value = "";
+    }
+
+    document.getElementById('assign-modal').classList.remove('hidden');
+    document.getElementById('assign-modal').classList.add('flex');
+}
+
+function closeModal() {
+    document.getElementById('assign-modal').classList.add('hidden');
+    document.getElementById('assign-modal').classList.remove('flex');
+}
+
+// 3. บันทึกข้อมูลลงตาราง (พร้อมเช็คครูสอนซ้ำ)
+function confirmAssignment() {
+    const room = document.getElementById('assign-room').value;
+    const day = document.getElementById('assign-day').value;
+    const subject = document.getElementById('assign-subject').value;
+    const teacher = document.getElementById('assign-teacher').value;
+
+    if (!subject || !teacher) {
+        alert("กรุณาเลือกวิชาและครูผู้สอนให้ครบ");
+        return;
+    }
+
+    // 🔥 ระบบป้องกัน: เช็คว่าครูคนนี้ติดสอนห้องอื่นใน "วัน/เวลา" เดียวกันหรือไม่
+    const conflict = finalSchedule.find(s => s.day === day && s.period === currentEditing.period && s.teacher === teacher && s.room !== room);
+    
+    if (conflict) {
+        alert(`❌ ครู${teacher} มีสอนอยู่ที่ห้อง ${conflict.room} ในคาบที่ ${currentEditing.period} แล้ว!`);
+        return;
+    }
+
+    // ลบข้อมูลเก่าในคาบนั้นออก (ถ้ามี) แล้วใส่ใหม่
+    finalSchedule = finalSchedule.filter(s => !(s.room === room && s.day === day && s.period === currentEditing.period));
+    
+    finalSchedule.push({
+        room, day, period: currentEditing.period, subject, teacher
+    });
+
+    closeModal();
+    updatePeriodView(); // อัปเดต UI ทันที
+    if (document.getElementById('preview').classList.contains('hidden') === false) {
+        renderMasterTable();
+    }
+}
+
+// ฟังก์ชันติ๊กเปิด/ปิดเวลาพัก (แยกตามห้อง)
+function toggleBreak(room, period, isChecked) {
+    roomSettings[room][period] = isChecked;
+    // ถ้าเปลี่ยนเป็นพัก ให้ลบข้อมูลวิชาที่อาจเคยบันทึกไว้ในคาบนั้นออก
+    if(isChecked) {
+        rawSchedule = rawSchedule.filter(item => !(item.room === room && item.period === period));
+    }
+    updatePeriodView();
+}
+
+function openAssignTools(p) {
+    currentSelectedPeriod = p;
+    document.getElementById('assignment-controls').classList.remove('hidden');
+    // Hilight ปุ่มที่เลือก (Optional UI)
+}
+
+function saveCurrentPeriod() {
+    const room = document.getElementById('assign-room').value;
+    const day = document.getElementById('assign-day').value;
+    const subject = document.getElementById('assign-subject').value;
+    const teacher = document.getElementById('assign-teacher').value;
+
+    if(!currentSelectedPeriod) return alert("กรุณาคลิกเลือก 'ปุ่มเลือกสอน' ในคาบที่ต้องการก่อน");
+
+    // ตรวจสอบสอนซ้ำ (ครูคนเดียวกัน เวลาเดียวกัน วันเดียวกัน)
+    const conflict = rawSchedule.find(item => item.day === day && item.period === currentSelectedPeriod && item.teacher === teacher);
+    if(conflict) {
+        return alert(`⚠️ ครู${teacher} มีสอนอยู่แล้วที่ห้อง ${conflict.room} ในคาบนี้!`);
+    }
+
+    // บันทึก (ทับข้อมูลเก่าถ้าซ้ำห้อง/วัน/คาบ)
+    rawSchedule = rawSchedule.filter(item => !(item.room === room && item.day === day && item.period === currentSelectedPeriod));
+    
+    rawSchedule.push({
+        room, day, subject, teacher, period: currentSelectedPeriod
+    });
+
+    alert(`บันทึกวิชา ${subject} ในคาบที่ ${currentSelectedPeriod} เรียบร้อย!`);
+    document.getElementById('assignment-controls').classList.add('hidden');
+}
+
+// 1. ประกาศตัวแปรเก็บข้อมูลเวลาแยกตามชั้นเรียนไว้ที่บนสุด
+let timeConfigsByLevel = {}; 
+
+// 2. ฟังก์ชันเลือก/ล้าง Checkbox
+function selectAllLevels(status) {
+    document.querySelectorAll('.level-chk').forEach(chk => chk.checked = status);
+}
+
+// 3. ฟังก์ชันสร้างช่องกรอกเวลา (กดปุ่ม "สร้างช่องกรอก" แล้วทำงานที่นี่)
+function generateManualFields() {
+    const countInput = document.getElementById('periodCount');
+    const container = document.getElementById('manualInputContainer');
+    
+    if (!countInput || !container) return; // กัน Error ถ้าหา ID ไม่เจอ
+
+    const count = parseInt(countInput.value);
+    container.innerHTML = "";
+
+    if (isNaN(count) || count <= 0) {
+        alert("กรุณาระบุจำนวนคาบที่ถูกต้อง");
+        return;
+    }
+
+    // วนลูปสร้างช่อง Input ตามจำนวนคาบ
+    for (let i = 1; i <= count; i++) {
+        container.innerHTML += `
+            <div class="p-3 border rounded-lg bg-gray-50 space-y-2 border-slate-200">
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] font-bold text-slate-500">คาบที่ ${i}</span>
+                    <select id="type-p-${i}" class="text-[10px] border rounded px-1 py-1 font-bold bg-white outline-none">
+                        <option value="teach">📖 สอน</option>
+                        <option value="break">☕ เบรก</option>
+                        <option value="lunch">🍱 พักเที่ยง</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="time" id="start-p-${i}" class="border p-1 rounded text-xs focus:ring-1 focus:ring-blue-400 outline-none">
+                    <input type="time" id="end-p-${i}" class="border p-1 rounded text-xs focus:ring-1 focus:ring-blue-400 outline-none">
+                </div>
+            </div>`;
+    }
+}
+
+// 4. ฟังก์ชันบันทึกข้อมูล (กดปุ่ม "บันทึกโครงสร้างเวลาเรียน")
+function confirmManualTimes() {
+    const checkboxes = document.querySelectorAll('.level-chk:checked');
+    const selectedLevels = Array.from(checkboxes).map(chk => chk.value);
+    const count = parseInt(document.getElementById('periodCount').value);
+    
+    if (selectedLevels.length === 0) {
+        alert("⚠️ กรุณาติ๊กเลือกชั้นเรียนอย่างน้อย 1 ชั้น");
+        return;
+    }
+
+    let currentConfig = [];
+    for (let i = 1; i <= count; i++) {
+        const start = document.getElementById(`start-p-${i}`).value;
+        const end = document.getElementById(`end-p-${i}`).value;
+        const type = document.getElementById(`type-p-${i}`).value;
+
+        if (!start || !end) {
+            alert(`❌ กรุณากรอกเวลาคาบที่ ${i} ให้ครบถ้วน`);
+            return;
+        }
+        currentConfig.push({ period: i, start, end, type });
+    }
+    
+    // บันทึกข้อมูลเข้าตัวแปร
+    selectedLevels.forEach(lvl => {
+        timeConfigsByLevel[lvl] = JSON.parse(JSON.stringify(currentConfig));
+    });
+    
+    alert(`✅ บันทึกเวลาให้ชั้น ${selectedLevels.join(', ')} เรียบร้อยแล้ว`);
+    
+    // อัปเดตตารางฝั่งขวา (ถ้ามีฟังก์ชัน updatePeriodView)
+    if (typeof updatePeriodView === "function") {
+        updatePeriodView(); 
+    }
+}
+
+function downloadTemplate(type) {
+    let data = [];
+    let fileName = "";
+
+    if (type === 'subject') {
+        // หัวข้อและตัวอย่างข้อมูลวิชา
+        data = [
+            ["ชื่อวิชา", "ประเภทวิชา"],
+            ["คณิตศาสตร์", "พื้นฐาน"],
+            ["ภาษาอังกฤษ", "เพิ่มเติม"],
+            ["วิทยาศาสตร์", "พื้นฐาน"]
+        ];
+        fileName = "template_subjects.xlsx";
+    } else if (type === 'teacher') {
+        // หัวข้อและตัวอย่างข้อมูลครู
+        data = [
+            ["ชื่อจริง", "นามสกุล", "ชื่อเล่น"],
+            ["สมชาย", "ใจดี", "ชาย"],
+            ["สมหญิง", "รักเรียน", "หญิง"]
+        ];
+        fileName = "template_teachers.xlsx";
+    }
+
+    // สร้าง Workbook และ Worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // เพิ่ม Worksheet ลงใน Workbook
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+    // สั่งให้ดาวน์โหลดไฟล์
+    XLSX.writeFile(wb, fileName);
+}
+
+function exportScheduleToExcel() {
+    if (finalSchedule.length === 0) {
+        alert("ยังไม่มีข้อมูลในตารางสอน");
+        return;
+    }
+
+    // เตรียมข้อมูลสำหรับ Excel
+    const exportData = finalSchedule.map(item => ({
+        "ห้อง": item.room,
+        "วัน": item.day,
+        "คาบที่": item.period,
+        "วิชา": item.subject,
+        "ครูผู้สอน": item.teacher
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    XLSX.utils.book_append_sheet(wb, ws, "ตารางสอน");
+    XLSX.writeFile(wb, "Smart_Timetable_Export.xlsx");
+}
+
+let currentPreviewDay = "จันทร์";
+
+// 1. สร้างปุ่มเลือกวัน (จันทร์ - ศุกร์)
+function renderPreviewTabs() {
+    const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+    const container = document.getElementById('preview-day-tabs');
+    container.innerHTML = days.map(day => `
+        <button onclick="changePreviewDay('${day}')" 
+                class="px-6 py-2 rounded-xl font-bold text-sm transition-all ${currentPreviewDay === day ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+            วัน${day}
+        </button>
+    `).join('');
+}
+
+function changePreviewDay(day) {
+    currentPreviewDay = day;
+    renderPreviewTabs();
+    renderMasterTable();
+}
+
+// 2. วาดตารางสรุปผลรวม
+function renderMasterTable() {
+    const roomSelect = document.getElementById('preview-room-select');
+    const roomTitle = document.getElementById('full-room-title');
+    const header = document.getElementById('table-header');
+    const body = document.getElementById('table-body');
+    
+    const roomShort = roomSelect ? roomSelect.value : ""; // ค่าที่ได้คือ "ป.1/1"
+    
+    if (!roomShort) return;
+
+    // --- ส่วนแก้ไข: แยก ป.1/1 ออกเป็น ป.1 และ 1 ---
+    const parts = roomShort.split('/'); // แยกด้วยเครื่องหมาย /
+    const levelName = parts[0]; // จะได้ "ป.1"
+    const roomNumber = parts[1]; // จะได้ "1"
+
+    // 1. ดึง Config เวลาโดยใช้ levelName (ป.1)
+    const config = (typeof timeConfigsByLevel !== 'undefined') ? timeConfigsByLevel[levelName] || [] : [];
+
+    // 2. แสดงชื่อหัวตาราง
+    const translate = { "ป.": "ชั้นประถมศึกษาปีที่ ", "ม.": "ชั้นมัธยมศึกษาปีที่ " };
+    let fullText = roomShort;
+    for (let key in translate) {
+        if (roomShort.includes(key)) fullText = roomShort.replace(key, translate[key]);
+    }
+    roomTitle.innerText = fullText;
+
+    // 3. วาดหัวตาราง (เหมือนเดิม)
+    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-xs font-black">วัน / เวลา</th>`;
+    config.forEach(slot => {
+        headerHtml += `
+            <th class="border-2 border-slate-300 p-2 text-center bg-amber-50">
+                <div class="text-amber-700 font-black text-sm">${slot.start} - ${slot.end}</div>
+                <div class="text-[9px] text-slate-400 font-bold uppercase">${slot.type === 'break' ? 'พัก' : 'คาบ '+slot.period}</div>
+            </th>`;
+    });
+    header.innerHTML = headerHtml;
+
+    // 4. วาดเนื้อหาตาราง
+    const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+    body.innerHTML = "";
+
+    days.forEach(dayName => {
+        const tr = document.createElement('tr');
+        tr.className = "h-24";
+        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50">${dayName}</td>`;
+
+        config.forEach(slot => {
+            if (slot.type === 'break') {
+                rowHtml += `<td class="border-2 border-slate-300 bg-orange-50/20 text-center uppercase text-[10px] font-black text-orange-400">BREAK</td>`;
+            } else {
+                // 🔥 จุดสำคัญ: ค้นหาโดยเช็คค่าที่บันทึกไว้ (ป.1/1)
+                const match = finalSchedule.find(s => 
+                    s.room === roomShort && // เช็คคำว่า "ป.1/1"
+                    s.day === dayName && 
+                    s.period === slot.period
+                );
+                
+                if (match) {
+                    rowHtml += `
+                        <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white">
+                            <div class="font-black text-slate-800 text-sm leading-tight">${match.subject}</div>
+                            <div class="text-[10px] font-bold text-blue-500 mt-2">ครู${match.teacher}</div>
+                        </td>`;
+                } else {
+                    rowHtml += `<td class="border-2 border-slate-300 p-2 bg-white/50"></td>`;
+                }
+            }
+        });
+        tr.innerHTML = rowHtml;
+        body.appendChild(tr);
+    });
+}
+
+function exportTableToImage() {
+    // 1. ดึง Element ส่วนที่ต้องการถ่ายภาพ (แผ่นกระดาษตารางเรียน)
+    const element = document.querySelector('.bg-white.p-8.rounded-\\[2rem\\].shadow-2xl.border');
+
+    if (!element) {
+        alert("ไม่พบส่วนที่ต้องการส่งออก กรุณาตรวจสอบ HTML");
+        return;
+    }
+
+    // 2. ใช้ html2canvas จับภาพ
+    html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff"
+    }).then(canvas => {
+        // 3. แปลง Canvas เป็น Data URL (PNG)
+        const image = canvas.toDataURL("image/png");
+
+        // 4. สร้างลิงก์ชั่วคราวเพื่อดาวน์โหลด
+        const link = document.createElement('a');
+        
+        // ตั้งชื่อไฟล์
+        const roomName = document.getElementById('full-room-title').innerText.replace(/[\/\s]/g, '-');
+        link.download = `ตารางเรียน_${roomName}_2569.png`;
+        
+        link.href = image;
+        document.body.appendChild(link);
+        
+        // 5. สั่งคลิกลิงก์เพื่อดาวน์โหลด
+        link.click();
+        
+        // 6. ลบลิงก์ทิ้ง
+        document.body.removeChild(link);
+    }).catch(err => {
+        alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ: " + err.message);
+    });
+}
+
+function updatePreviewRoomDropdown() {
+    const select = document.getElementById('preview-room-select');
+    if (!select) return;
+
+    // ล้างค่าเก่าออกก่อน
+    select.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>';
+
+    // Mapping level codes to Thai names
+    const ThaiNames = { 
+        'P1':'ป.1', 'P2':'ป.2', 'P3':'ป.3', 'P4':'ป.4', 'P5':'ป.5', 'P6':'ป.6', 
+        'M1':'ม.1', 'M2':'ม.2', 'M3':'ม.3', 'M4':'ม.4', 'M5':'ม.5', 'M6':'ม.6'
+    };
+
+    // วนลูปดึงรายชื่อห้องจาก appData (โครงสร้างห้องที่คุณมี)
+    for (let lvl in appData.rooms) {
+        const count = appData.rooms[lvl];
+        const thaiLvl = ThaiNames[lvl] || lvl;
+        for (let i = 1; i <= count; i++) {
+            const roomName = `${thaiLvl}/${i}`;
+            const option = document.createElement('option');
+            option.value = roomName;
+            option.textContent = roomName;
+            select.appendChild(option);
+        }
+    }
+}
+
+function updatePreviewDropdown() {
+    const select = document.getElementById('preview-room-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>';
+    
+    // วนลูปตามโครงสร้าง appData.rooms ที่คุณมี
+    for (let level in appData.rooms) {
+        for (let i = 1; i <= appData.rooms[level]; i++) {
+            const roomName = `${level}/${i}`; // เช่น ป.1/1
+            const opt = document.createElement('option');
+            opt.value = roomName;
+            opt.textContent = roomName;
+            select.appendChild(opt);
+        }
+    }
+}
+
+
+// เรียกใช้งานทุกครั้งที่กดเข้าหน้า ดูตารางเรียน
+function showPreview() {
+    showSection('preview');
+    updatePreviewRoomDropdown(); // เติมห้องเรียน
+    renderMasterTable();         // วาดตาราง
+    renderPreviewTabs();
+}
+
+function renderTeacherTable() {
+    const teacherName = document.getElementById('teacher-name-input').value.trim();
+    const displayName = document.getElementById('teacher-display-name');
+    const header = document.getElementById('teacher-table-header');
+    const body = document.getElementById('teacher-table-body');
+
+    if (!teacherName) {
+        displayName.innerText = "กรุณาระบุชื่อครู";
+        body.innerHTML = "";
+        return;
+    }
+
+    displayName.innerText = "คุณครู" + teacherName;
+
+    // 1. ใช้โครงสร้างเวลาจาก ป.1 เป็นหลัก (หรือระดับที่ต้องการ)
+    const config = timeConfigsByLevel["ป.1"] || []; 
+    
+    // 2. วาด Header (เวลา)
+    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-center text-xs font-black">วัน / เวลา</th>`;
+    config.forEach(slot => {
+        headerHtml += `
+            <th class="border-2 border-slate-300 p-2 text-center bg-amber-50 min-w-[100px]">
+                <div class="text-amber-700 font-black text-sm">${slot.start} - ${slot.end}</div>
+                <div class="text-[9px] text-slate-400 font-bold">${slot.type === 'break' ? 'พัก' : 'คาบ '+slot.period}</div>
+            </th>`;
+    });
+    header.innerHTML = headerHtml;
+
+    // 3. วาดตาราง 5 วัน
+    const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+    body.innerHTML = "";
+
+    days.forEach(dayName => {
+        const tr = document.createElement('tr');
+        tr.className = "h-24";
+        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50 text-slate-700">${dayName}</td>`;
+
+        config.forEach(slot => {
+            if (slot.type === 'break') {
+                rowHtml += `<td class="border-2 border-slate-300 bg-orange-50/10 text-center uppercase text-[9px] font-bold text-orange-300">พัก</td>`;
+            } else {
+                // ค้นหาวิชาที่ครูคนนี้สอนในวันและคาบนั้นๆ
+                const match = finalSchedule.find(s => 
+                    s.teacher === teacherName && 
+                    s.day === dayName && 
+                    s.period === slot.period
+                );
+
+                if (match) {
+                    rowHtml += `
+                        <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white">
+                            <div class="font-black text-slate-800 text-sm leading-tight">${match.subject}</div>
+                            <div class="text-[10px] font-bold text-green-600 mt-2 uppercase">ห้อง ${match.room}</div>
+                        </td>`;
+                } else {
+                    rowHtml += `<td class="border-2 border-slate-300 p-2 bg-white/50"></td>`;
+                }
+            }
+        });
+        tr.innerHTML = rowHtml;
+        body.appendChild(tr);
+    });
+}
+
+// ฟังก์ชันส่งออกเป็นรูปภาพสำหรับครู
+function exportTeacherTableToImage() {
+    const element = document.getElementById('teacher-print-area');
+    const teacherName = document.getElementById('teacher-name-input').value || 'ครู';
+
+    html2canvas(element, { scale: 2 }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `ตารางสอน_ครู${teacherName}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    });
+}
+
+    </script>
+
+</body>
+</html>
