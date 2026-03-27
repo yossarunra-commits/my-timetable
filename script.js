@@ -30,34 +30,34 @@ async function saveToCloud() {
 // ฟังก์ชันดึงข้อมูลจาก Cloud มาแสดงผล
 async function syncFromCloud() {
     try {
-        console.log("🔄 กำลังตรวจสอบข้อมูลจาก Cloud...");
-        // เพิ่มตัวแปรสุ่ม ?t= เพื่อป้องกัน Browser จำค่าเก่า (Cache)
-        const response = await fetch(G_SCRIPT_URL + "?t=" + new Date().getTime());
-        const text = await response.text(); 
+        console.log("🔄 กำลังดึงข้อมูลล่าสุดจาก Cloud...");
+        const response = await fetch(G_SCRIPT_URL, {
+            method: 'GET',
+            redirect: 'follow' // สำคัญมาก: เพื่อให้ fetch เดินทางไปถึงข้อมูลจริง
+        });
         
-        if (!text || text === "{}" || text === "[]") {
-            console.log("☁️ ยังไม่มีข้อมูลบน Cloud");
-            return;
-        }
+        const text = await response.text();
+        if (!text || text === "" || text === "{}") return;
 
         const cloudData = JSON.parse(text);
         
-        // เช็คว่ามีข้อมูลตาราง (finalSchedule) ส่งมาจริงไหม
-        if (cloudData && cloudData.finalSchedule) {
-            // ✅ นำข้อมูลจาก Cloud มาใส่ในตัวแปรเครื่องเรา
+        // ตรวจสอบว่าข้อมูลใน Cloud ไม่ว่างเปล่า
+        if (cloudData && (cloudData.finalSchedule && cloudData.finalSchedule.length > 0)) {
+            // ✅ นำข้อมูลมาใส่ในโปรแกรม
             finalSchedule = cloudData.finalSchedule;
             appData = cloudData.appData || appData;
             
-            // เซฟลง LocalStorage ของเครื่องนั้นๆ
+            // เซฟลงเครื่องคนดู (โทรศัพท์)
             localStorage.setItem('my_timetable_data', text);
             
-            console.log("✅ Sync สำเร็จ! ข้อมูลล่าสุด: " + (cloudData.lastUpdated || "ไม่ระบุเวลา"));
-
-            // 🔥 สั่งให้หน้าเว็บวาดตารางใหม่ทันที
-            updateAllViews(); 
+            console.log("✅ ข้อมูลอัปเดตแล้ว!");
+            
+            // 🔥 สั่งวาดหน้าจอใหม่ทันที
+            if (typeof renderSchedule === 'function') renderSchedule();
+            if (typeof renderTeacherTable === 'function') renderTeacherTable();
         }
     } catch (err) {
-        console.error("❌ Sync Error:", err);
+        console.error("❌ ไม่สามารถดึงข้อมูลจาก Cloud ได้:", err);
     }
 }
 
