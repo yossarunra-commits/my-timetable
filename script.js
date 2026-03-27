@@ -1,4 +1,4 @@
-const G_SCRIPT_URL = "https://script.google.com/a/macros/prasartvidnon.ac.th/s/AKfycbxhUFdfclZKI3_gazfSqlGzLvGXoY7sZsbaq5OQTDEZw6QsCvVyPdhIubS3K32MnBoFGw/exec";
+const G_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxhUFdfclZKI3_gazfSqlGzLvGXoY7sZsbaq5OQTDEZw6QsCvVyPdhIubS3K32MnBoFGw/exec";
 
 // ฟังก์ชันบันทึกข้อมูลทั้งหมดขึ้น Cloud
 async function saveToCloud() {
@@ -30,27 +30,42 @@ async function saveToCloud() {
 // ฟังก์ชันดึงข้อมูลจาก Cloud มาแสดงผล
 async function syncFromCloud() {
     try {
-        const response = await fetch(G_SCRIPT_URL);
-        const text = await response.text(); // รับค่าเป็น Text ก่อนเพื่อป้องกัน Error
+        console.log("🔄 กำลังตรวจสอบข้อมูลจาก Cloud...");
+        // เพิ่มตัวแปรสุ่ม ?t= เพื่อป้องกัน Browser จำค่าเก่า (Cache)
+        const response = await fetch(G_SCRIPT_URL + "?t=" + new Date().getTime());
+        const text = await response.text(); 
+        
+        if (!text || text === "{}" || text === "[]") {
+            console.log("☁️ ยังไม่มีข้อมูลบน Cloud");
+            return;
+        }
+
         const cloudData = JSON.parse(text);
         
+        // เช็คว่ามีข้อมูลตาราง (finalSchedule) ส่งมาจริงไหม
         if (cloudData && cloudData.finalSchedule) {
-            // อัปเดตข้อมูลในตัวแปรหลัก
+            // ✅ นำข้อมูลจาก Cloud มาใส่ในตัวแปรเครื่องเรา
+            finalSchedule = cloudData.finalSchedule;
             appData = cloudData.appData || appData;
-            finalSchedule = cloudData.finalSchedule || [];
             
-            // บันทึกลง LocalStorage ของเครื่องนั้นๆ ไว้ด้วย
+            // เซฟลง LocalStorage ของเครื่องนั้นๆ
             localStorage.setItem('my_timetable_data', text);
             
-            console.log("Data synced from cloud.");
-            
-            // สั่งให้ตารางวาดใหม่ (ใช้ชื่อฟังก์ชันวาดตารางของคุณ)
-            if (typeof renderSchedule === 'function') renderSchedule(); 
-            if (typeof renderTeacherTable === 'function') renderTeacherTable();
+            console.log("✅ Sync สำเร็จ! ข้อมูลล่าสุด: " + (cloudData.lastUpdated || "ไม่ระบุเวลา"));
+
+            // 🔥 สั่งให้หน้าเว็บวาดตารางใหม่ทันที
+            updateAllViews(); 
         }
     } catch (err) {
-        console.error("Sync error:", err);
+        console.error("❌ Sync Error:", err);
     }
+}
+
+// ฟังก์ชันช่วยสั่งวาดหน้าจอใหม่ทั้งหมด
+function updateAllViews() {
+    if (typeof renderSchedule === 'function') renderSchedule();
+    if (typeof renderTeacherTable === 'function') renderTeacherTable();
+    // ถ้าคุณมีฟังก์ชันวาดหน้าแรกหรือหน้าอื่นๆ ให้ใส่เพิ่มที่นี่
 }
 
 // ส่วนล่างสุดของไฟล์ script.js
