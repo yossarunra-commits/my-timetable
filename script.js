@@ -52,3 +52,29 @@ async function syncFromCloud() {
         console.error("Sync error:", err);
     }
 }
+
+// ส่วนล่างสุดของไฟล์ script.js
+window.addEventListener('load', async () => {
+    console.log("ระบบกำลังเริ่มทำงาน...");
+
+    // 1. ลองดึงข้อมูลจากเครื่องตัวเองก่อน (เพื่อให้หน้าเว็บไม่ว่างระหว่างรอเน็ต)
+    const localData = localStorage.getItem('my_timetable_data');
+    if (localData) {
+        try {
+            const parsed = JSON.parse(localData);
+            // ตรวจสอบชื่อตัวแปรหลักของคุณ (เช่น appData, finalSchedule)
+            if (parsed.appData) appData = parsed.appData;
+            if (parsed.finalSchedule) finalSchedule = parsed.finalSchedule;
+            
+            // สั่งวาดตารางทันทีจากข้อมูลในเครื่อง
+            if (typeof renderSchedule === 'function') renderSchedule();
+            console.log("โหลดข้อมูลจาก LocalStorage สำเร็จ");
+        } catch (e) {
+            console.error("LocalStorage Parse Error", e);
+        }
+    }
+
+    // 2. ดึงข้อมูลล่าสุดจาก Google Sheets (Cloud) มาทับ
+    // เพื่อให้แน่ใจว่าทุกคนเห็นข้อมูลเดียวกันกับที่คุณเพิ่งอัปเดตไป
+    await syncFromCloud(); 
+});
