@@ -1,12 +1,16 @@
 // --- 1. Firebase Configuration ---
+// ใช้ Config ชุดเต็มที่คุณส่งมาก่อนหน้านี้ (รวม apiKey, projectId ฯลฯ)
 const firebaseConfig = {
+    apiKey: "AIzaSyBCtIQkl0sS4g5r767LUs5vshAHv9wkbd8", // ใส่ให้ครบตามที่คุณมี
     databaseURL: "https://my-timetable-8e9c0-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const database = firebase.database();
 
+// --- 2. Realtime Sync ---
 function startSync() {
     console.log("🔄 กำลังดึงข้อมูลจาก Cloud...");
     
@@ -15,30 +19,32 @@ function startSync() {
         
         if (cloudData) {
             console.log("✅ ข้อมูลจาก Cloud มาถึงแล้ว");
-
-            // อัปเดตตัวแปรหลัก
-            appData = cloudData.appData;
-            finalSchedule = cloudData.finalSchedule;
-
-            // ตรวจสอบว่ามีฟังก์ชันวาดหน้าจอไหม แล้วค่อยสั่งรัน
-            if (typeof renderSchedule === 'function') renderSchedule();
-            if (typeof renderTeacherTable === 'function') renderTeacherTable();
-            if (typeof updateTeacherList === 'function') updateTeacherList();
-            if (typeof updateSubjectList === 'function') updateSubjectList();
             
-            // ถ้าหน้าแรกหาย ให้เรียกโชว์หน้าปัจจุบันอีกครั้ง
-            // showSection(currentSection || 'section-import'); 
+            // อัปเดตตัวแปรหลัก (ป้องกัน Error ถ้าข้อมูลบางส่วนหาย)
+            appData = cloudData.appData || { teachers: [], subjects: [], rooms: {} };
+            finalSchedule = cloudData.finalSchedule || [];
+
+            // 🔥 บังคับวาดหน้าจอใหม่ทันที
+            refreshUI();
         }
     });
 }
 
-// 2. เรียกใช้งานทันทีที่เปิดเว็บ (วางไว้ล่างสุดของไฟล์)
-window.addEventListener('load', () => {
-    startSync(); // เริ่มดึงข้อมูลจาก Firebase ทันทีที่โหลดหน้าจอ
-});
+function refreshUI() {
+    if (typeof renderSchedule === 'function') renderSchedule();
+    if (typeof renderTeacherTable === 'function') renderTeacherTable();
+    if (typeof updateTeacherList === 'function') updateTeacherList();
+    if (typeof updateSubjectList === 'function') updateSubjectList();
+    
+    // สำคัญ: ถ้าหน้าเว็บว่าง ให้แสดงหน้าปัจจุบัน
+    // showSection(currentSection || 'section-import');
+}
 
-// --- 3. บันทึกข้อมูลขึ้น Cloud ---
+// --- 3. บันทึกข้อมูล ---
 async function saveToCloud() {
+    // เช็คก่อนว่ามีข้อมูลให้เซฟไหม
+    if (!appData) return alert("ไม่มีข้อมูลให้บันทึก");
+
     const dataToSave = {
         appData: appData,
         finalSchedule: finalSchedule,
@@ -47,46 +53,28 @@ async function saveToCloud() {
 
     try {
         await database.ref('timetable').set(dataToSave);
-        alert("🔥 บันทึกสำเร็จ! ข้อมูลถูกอัปเดตไปยังทุกเครื่องแล้ว");
+        alert("🔥 บันทึกสำเร็จ! ทุกเครื่องจะเห็นข้อมูลนี้ทันที");
     } catch (err) {
         alert("❌ บันทึกไม่สำเร็จ: " + err.message);
     }
 }
 
-// --- 4. ฟังก์ชันสำหรับ Responsive Sidebar (มือถือ/iPad) ---
-function toggleSidebar() {
-    const sidebar = document.querySelector('aside'); // หรือ ID ที่คุณตั้งไว้
-    const overlay = document.getElementById('sidebar-overlay');
-    
-    sidebar.classList.toggle('-translate-x-full');
-    overlay.classList.toggle('hidden');
-}
-
-// เริ่มทำงานเมื่อโหลดหน้าเว็บ
-window.addEventListener('load', () => {
-    startSync();
-});
-
-// ฟังก์ชัน เปิด-ปิด Sidebar
+// --- 4. Navigation & Sidebar ---
 function toggleSidebar() {
     const sidebar = document.getElementById('main-sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    
-    sidebar.classList.toggle('-translate-x-full');
-    overlay.classList.toggle('hidden');
+    if (sidebar) sidebar.classList.toggle('-translate-x-full');
+    if (overlay) overlay.classList.toggle('hidden');
 }
 
-// ฟังก์ชันจัดการเมื่อคลิกเมนู (ให้ปิดเมนูอัตโนมัติถ้าอยู่บนมือถือ)
 function handleMenuClick(section) {
-    // 1. เรียกฟังก์ชันแสดงหน้าเดิมของคุณ
     if (section === 'teacher-schedule') {
         showTeacherScheduleSection();
     } else {
         showSection(section);
     }
-
-    // 2. ถ้าเป็นหน้าจอเล็ก ให้ปิด Sidebar หลังกดเลือก
-    if (window.innerWidth < 1024) {
-        toggleSidebar();
-    }
+    if (window.innerWidth < 1024) toggleSidebar();
 }
+
+// เรียกทำงานเพียงครั้งเดียว
+window.addEventListener('load', startSync);
