@@ -1,50 +1,48 @@
-// --- 1. Firebase Configuration ---
-// ใช้ Config ชุดเต็มที่คุณส่งมาก่อนหน้านี้ (รวม apiKey, projectId ฯลฯ)
+// --- 1. การตั้งค่าตัวแปร (สำคัญ: ห้ามใส่ค่าว่างทับในฟังก์ชันอื่น) ---
+let appData = { teachers: [], subjects: [], rooms: {} };
+let finalSchedule = [];
+
 const firebaseConfig = {
-    apiKey: "AIzaSyBCtIQkl0sS4g5r767LUs5vshAHv9wkbd8", // ใส่ให้ครบตามที่คุณมี
-    databaseURL: "https://my-timetable-8e9c0-default-rtdb.asia-southeast1.firebasedatabase.app"
+  apiKey: "AIzaSyBCtIQkl0sS4g5r767LUs5vshAHv9wkbd8",
+  authDomain: "my-timetable-8e9c0.firebaseapp.com",
+  databaseURL: "https://my-timetable-8e9c0-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "my-timetable-8e9c0",
+  storageBucket: "my-timetable-8e9c0.firebasestorage.app",
+  messagingSenderId: "838052306956",
+  appId: "1:838052306956:web:077a6c0913419dd7fa4e29"
 };
 
+// Initialize Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const database = firebase.database();
 
-// --- 2. Realtime Sync ---
+// --- 2. ระบบดึงข้อมูล Realtime (แก้ปัญหา Refresh แล้วหาย) ---
 function startSync() {
+    console.log("🔄 กำลังเชื่อมต่อ Cloud...");
     database.ref('timetable').on('value', (snapshot) => {
         const cloudData = snapshot.val();
         if (cloudData) {
-            // 1. เอาข้อมูลมาใส่ตัวแปร
-            appData = cloudData.appData;
-            finalSchedule = cloudData.finalSchedule;
-
-            console.log("🔥 ข้อมูลจาก Cloud มาถึงแล้ว!", appData);
-
-            // 2. 🔥 สำคัญมาก: ต้องเรียกฟังก์ชันที่ใช้ "วาดตาราง" ของคุณ
-            // ลองเช็คในไฟล์เดิมดูว่าคุณใช้ชื่อฟังก์ชันอะไร แล้วใส่ให้ตรงกันครับ
-            if (typeof renderSchedule === 'function') renderSchedule();
-            if (typeof renderTeacherTable === 'function') renderTeacherTable();
-            if (typeof updateTeacherList === 'function') updateTeacherList();
+            console.log("✅ ข้อมูลอัปเดตจาก Cloud แล้ว");
+            appData = cloudData.appData || appData;
+            finalSchedule = cloudData.finalSchedule || [];
+            
+            // สั่งวาดหน้าจอใหม่ทันทีที่มีข้อมูลมา
+            refreshAllUI();
         }
     });
 }
 
-function refreshUI() {
+function refreshAllUI() {
     if (typeof renderSchedule === 'function') renderSchedule();
     if (typeof renderTeacherTable === 'function') renderTeacherTable();
     if (typeof updateTeacherList === 'function') updateTeacherList();
     if (typeof updateSubjectList === 'function') updateSubjectList();
-    
-    // สำคัญ: ถ้าหน้าเว็บว่าง ให้แสดงหน้าปัจจุบัน
-    // showSection(currentSection || 'section-import');
 }
 
-// --- 3. บันทึกข้อมูล ---
+// --- 3. ระบบบันทึกข้อมูล ---
 async function saveToCloud() {
-    // เช็คก่อนว่ามีข้อมูลให้เซฟไหม
-    if (!appData) return alert("ไม่มีข้อมูลให้บันทึก");
-
     const dataToSave = {
         appData: appData,
         finalSchedule: finalSchedule,
@@ -53,28 +51,33 @@ async function saveToCloud() {
 
     try {
         await database.ref('timetable').set(dataToSave);
-        alert("🔥 บันทึกสำเร็จ! ทุกเครื่องจะเห็นข้อมูลนี้ทันที");
+        alert("💾 บันทึกสำเร็จ! ข้อมูลอัปเดตทุกเครื่องแล้ว");
     } catch (err) {
         alert("❌ บันทึกไม่สำเร็จ: " + err.message);
     }
 }
 
-// --- 4. Navigation & Sidebar ---
+// --- 4. ระบบจัดการหน้าจอ (Responsive) ---
 function toggleSidebar() {
     const sidebar = document.getElementById('main-sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    if (sidebar) sidebar.classList.toggle('-translate-x-full');
-    if (overlay) overlay.classList.toggle('hidden');
+    sidebar.classList.toggle('-translate-x-full');
+    overlay.classList.toggle('hidden');
 }
 
-function handleMenuClick(section) {
-    if (section === 'teacher-schedule') {
+function handleMenuClick(sectionId) {
+    // ปิดเมนูอัตโนมัติถ้าเป็นมือถือ
+    if (window.innerWidth < 1024) toggleSidebar();
+    
+    // เรียกฟังก์ชันเปลี่ยนหน้าเดิมของคุณ
+    if (sectionId === 'teacher-schedule') {
         showTeacherScheduleSection();
     } else {
-        showSection(section);
+        showSection(sectionId);
     }
-    if (window.innerWidth < 1024) toggleSidebar();
 }
 
-// เรียกทำงานเพียงครั้งเดียว
-window.addEventListener('load', startSync);
+// --- เริ่มการทำงานเมื่อโหลดหน้าเว็บ ---
+window.addEventListener('load', () => {
+    startSync(); // ดึงข้อมูลทันที
+});
