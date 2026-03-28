@@ -56,3 +56,27 @@ function toggleSidebar() {
 window.addEventListener('load', () => {
     startSync();
 });
+
+// ฟังก์ชัน เปิด-ปิด Sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('main-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    sidebar.classList.toggle('-translate-x-full');
+    overlay.classList.toggle('hidden');
+}
+
+// ฟังก์ชันจัดการเมื่อคลิกเมนู (ให้ปิดเมนูอัตโนมัติถ้าอยู่บนมือถือ)
+function handleMenuClick(section) {
+    // 1. เรียกฟังก์ชันแสดงหน้าเดิมของคุณ
+    if (section === 'teacher-schedule') {
+        showTeacherScheduleSection();
+    } else {
+        showSection(section);
+    }
+
+    // 2. ถ้าเป็นหน้าจอเล็ก ให้ปิด Sidebar หลังกดเลือก
+    if (window.innerWidth < 1024) {
+        toggleSidebar();
+    }
+}
