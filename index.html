@@ -830,6 +830,7 @@ function closeModal() {
 
 // 3. บันทึกข้อมูลลงตาราง (พร้อมเช็คครูสอนซ้ำ)
 function confirmAssignment() {
+    if(event) event.preventDefault(); // ป้องกันการรีเฟรชหน้า
     const room = document.getElementById('assign-room').value;
     const day = document.getElementById('assign-day').value;
     const subject = document.getElementById('assign-subject').value;
