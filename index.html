@@ -29,54 +29,33 @@
     
 </head>
 <body class="bg-gray-100 flex h-screen overflow-hidden">
+    <button onclick="toggleSidebar()" class="lg:hidden fixed top-4 left-4 z-50 bg-slate-800 text-white p-3 rounded-xl shadow-lg focus:outline-none">
+    <i class="fas fa-bars"></i>
+</button>
 
-    <button onclick="toggleSidebar()" class="lg:hidden fixed top-4 left-4 z-50 bg-slate-800 text-white p-3 rounded-xl shadow-lg">
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <aside id="main-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-800 text-white flex flex-col shadow-xl transform -translate-x-full transition-transform duration-300 lg:translate-x-0 lg:static">
-        <div class="p-6 text-center border-b border-slate-700">
-            <h1 class="text-xl font-bold italic text-blue-400"><i class="fas fa-calendar-alt mr-2"></i>PSV</h1>
-        </div>
+<aside id="main-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-800 text-white flex flex-col shadow-xl transform -translate-x-full transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static">
+    <div class="p-6 text-center border-b border-slate-700">
+        <h1 class="text-xl font-bold italic text-blue-400"><i class="fas fa-calendar-alt mr-2"></i>PSV</h1>
+    </div>
+    <nav class="flex-1 mt-4 overflow-y-auto">
+        <a href="javascript:void(0)" onclick="handleMenuClick('section-import')" id="menu-section-import" class="sidebar-item active-menu flex items-center p-4 hover:bg-slate-700 transition-all">
+            <i class="fas fa-file-import w-8 text-lg"></i> <span> นำเข้าข้อมูล</span>
+        </a>
+        <a href="javascript:void(0)" onclick="handleMenuClick('schedule')" id="menu-schedule" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
+            <i class="fas fa-clock w-8 text-lg"></i> <span>จัดตารางเวลา</span>
+        </a>
+        <a href="javascript:void(0)" onclick="handleMenuClick('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
+            <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
+        </a>
+        <a href="javascript:void(0)" onclick="handleMenuClick('teacher-schedule')" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
+            <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
+        </a>
         
-        <nav class="flex-1 mt-4 overflow-y-auto">
-            <a href="javascript:void(0)" onclick="handleMenuClick('section-import')" id="menu-section-import" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
-                <i class="fas fa-file-import w-8 text-lg"></i> <span> นำเข้าข้อมูล</span>
-            </a>
-            <a href="javascript:void(0)" onclick="handleMenuClick('schedule')" id="menu-schedule" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
-                <i class="fas fa-clock w-8 text-lg"></i> <span>จัดตารางเวลา</span>
-            </a>
-            <a href="javascript:void(0)" onclick="handleMenuClick('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
-                <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
-            </a>
-            <a href="javascript:void(0)" onclick="handleMenuClick('teacher-schedule')" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 hover:bg-slate-700 transition-all">
-                <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
-            </a>
-
-            <div class="px-4 mt-6">
-                <button onclick="saveToCloud()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2">
-                    <i class="fas fa-cloud-upload-alt"></i> บันทึกขึ้น Cloud
-                </button>
-            </div>
-        </nav>
-        
-        <div class="p-4 text-xs text-slate-400 border-t border-slate-700"> Version 1.0 (Firebase Mode) </div>
-    </aside>
-
-    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
-
-    <main class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-            <div id="section-import" class="section-content"> ... </div>
-            <div id="schedule" class="section-content hidden"> ... </div>
-            <div class="overflow-x-auto bg-white rounded-3xl shadow-sm">
-                 <div id="schedule-print-area" class="min-w-[1000px]"> </div>
-            </div>
-        </div>
-    </main>
-
-    <script src="script.js"></script>
-</body>
+    </nav>
+    <div class="p-4 text-xs text-slate-400 border-t border-slate-700">
+        Version 1.0 (BETA)
+    </div>
+</aside>
 
 <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
 
