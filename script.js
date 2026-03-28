@@ -8,24 +8,38 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
 // --- 2. Realtime Sync (ดึงข้อมูลอัตโนมัติ) ---
+// 1. ฟังก์ชันดึงข้อมูลแบบ Realtime (ใส่ไว้ใน script.js)
 function startSync() {
-    console.log("🔄 Connecting to Firebase...");
-    // ดึงข้อมูลจาก Path 'timetable'
+    console.log("🔄 กำลังเชื่อมต่อฐานข้อมูล...");
+    
+    // อ้างอิงไปที่ Path 'timetable' ใน Firebase ของคุณ
     database.ref('timetable').on('value', (snapshot) => {
         const cloudData = snapshot.val();
+        
         if (cloudData) {
-            // อัปเดตตัวแปรหลักในโปรแกรม
-            appData = cloudData.appData || appData;
+            console.log("✅ ได้รับข้อมูลล่าสุดจาก Cloud");
+
+            // สำคัญมาก: เอาข้อมูลจาก Cloud มาเติมใส่ตัวแปรหลักของโปรแกรม
+            appData = cloudData.appData || { teachers: [], subjects: [], rooms: {} };
             finalSchedule = cloudData.finalSchedule || [];
-            
-            console.log("✅ Data synced from Firebase:", cloudData.lastUpdated);
-            
-            // สั่งวาดหน้าจอใหม่ (ตรวจสอบชื่อฟังก์ชันของคุณ)
+
+            // สั่งให้หน้าเว็บวาดตารางใหม่ด้วยข้อมูลที่เพิ่งได้มา
             if (typeof renderSchedule === 'function') renderSchedule();
             if (typeof renderTeacherTable === 'function') renderTeacherTable();
+            
+            // (ถ้ามีหน้าจอสรุปรายชื่อ)
+            updateTeacherList(); 
+            updateSubjectList();
+        } else {
+            console.log("❓ ยังไม่มีข้อมูลในฐานข้อมูล Cloud");
         }
     });
 }
+
+// 2. เรียกใช้งานทันทีที่เปิดเว็บ (วางไว้ล่างสุดของไฟล์)
+window.addEventListener('load', () => {
+    startSync(); // เริ่มดึงข้อมูลจาก Firebase ทันทีที่โหลดหน้าจอ
+});
 
 // --- 3. บันทึกข้อมูลขึ้น Cloud ---
 async function saveToCloud() {
