@@ -79,9 +79,10 @@
             <a href="javascript:void(0)" onclick="showSection('schedule')" id="menu-schedule" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-clock w-8 text-lg"></i> <span>จัดตารางเวลา</span>
             </a>
-            <a href="javascript:void(0)" onclick="showPreview('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
+            <a href="javascript:void(0)" onclick="showPreview()" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
             </a>
+                    
             <a href="javascript:void(0)" onclick="showTeacherScheduleSection()" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-chalkboard-teacher w-8 text-lg"></i> <span>ตารางสอนครู</span>
             </a>
@@ -1335,31 +1336,51 @@ function exportTableToImage() {
         alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ: " + err.message);
     });
 }
+// ฟังก์ชันดึงรายชื่อห้องเรียนจาก Firebase มาใส่ใน Dropdown อัตโนมัติ
 function updatePreviewRoomDropdown() {
     const select = document.getElementById('preview-room-select');
     if (!select) return;
 
-    // ล้างค่าเก่าออกก่อน
-    select.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>';
+    // เก็บค่าที่เลือกค้างไว้ (ถ้ามี)
+    const currentSelected = select.value;
 
-    // Mapping level codes to Thai names
-    const ThaiNames = { 
-        'P1':'ป.1', 'P2':'ป.2', 'P3':'ป.3', 'P4':'ป.4', 'P5':'ป.5', 'P6':'ป.6', 
-        'M1':'ม.1', 'M2':'ม.2', 'M3':'ม.3', 'M4':'ม.4', 'M5':'ม.5', 'M6':'ม.6'
-    };
+    // ดึงข้อมูลจาก Path หลักของตารางเรียน
+    db.ref('timetable_assignments').on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        // ล้างตัวเลือกเก่าออกก่อน
+        select.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>';
 
-    // วนลูปดึงรายชื่อห้องจาก appData (โครงสร้างห้องที่คุณมี)
-    for (let lvl in appData.rooms) {
-        const count = appData.rooms[lvl];
-        const thaiLvl = ThaiNames[lvl] || lvl;
-        for (let i = 1; i <= count; i++) {
-            const roomName = `${thaiLvl}/${i}`;
-            const option = document.createElement('option');
-            option.value = roomName;
-            option.textContent = roomName;
-            select.appendChild(option);
+        if (data) {
+            const rooms = [];
+
+            // วนลูปดึง Level (ป_1) และ Room Number (1)
+            Object.keys(data).forEach(levelKey => {
+                const roomNumbers = data[levelKey];
+                Object.keys(roomNumbers).forEach(roomNum => {
+                    // แปลงรูปแบบจาก ป_1 เป็น ป.1 เพื่อแสดงผล
+                    const levelName = levelKey.replace(/_/g, '.');
+                    const fullRoomName = `${levelName}/${roomNum}`;
+                    rooms.push(fullRoomName);
+                });
+            });
+
+            // เรียงลำดับชื่อห้องและสร้าง Option
+            rooms.sort().forEach(roomName => {
+                const option = document.createElement('option');
+                option.value = roomName;
+                option.text = roomName;
+                if (roomName === currentSelected) option.selected = true;
+                select.appendChild(option);
+            });
+            
+            // ถ้ามีห้องในรายการ และยังไม่มีการเลือก ให้เลือกห้องแรกอัตโนมัติ
+            if (!select.value && select.options.length > 1) {
+                select.selectedIndex = 1;
+                renderMasterTable(); // วาดตารางห้องแรกทันที
+            }
         }
-    }
+    });
 }
 
 function updatePreviewDropdown() {
