@@ -1529,6 +1529,7 @@ async function downloadCanvas(element, fileName) {
         }
 
        // ตรวจสอบการ Initialize Firebase (ใช้ Config ของคุณ)
+// --- 1. การตั้งค่า Firebase (ใช้ตามที่คุณให้มา) ---
 const firebaseConfig = {
     apiKey: "AIzaSyBCtIQkl0sS4g5r767LUs5vshAHv9wkbd8",
     authDomain: "my-timetable-8e9c0.firebaseapp.com",
@@ -1545,65 +1546,102 @@ if (!firebase.apps.length) {
 }
 const db = firebase.database();
 
-async function manualSaveData(event) {
-    if (event) event.preventDefault(); // ป้องกันการรีเฟรชหน้าจอ
+// --- 2. ฟังก์ชันโหลดข้อมูลมาแสดงผล (เรียกใช้ตอนโหลดหน้าเว็บ) ---
+function loadDataFromFirebase() {
+    const statusText = document.getElementById('save-status-text');
+    statusText.innerText = "กำลังโหลดข้อมูลล่าสุด...";
 
-    const saveBtn = document.getElementById('btn-save-firebase');
+    db.ref('timetable_settings').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!data) {
+            statusText.innerText = "ไม่พบข้อมูลเดิมในระบบ";
+            return;
+        }
+
+        // แสดงผลรายชื่อครู
+        if (data.teachers) {
+            const tbody = document.querySelector("#teacherTable tbody");
+            tbody.innerHTML = "";
+            data.teachers.forEach(t => renderRow('teacherTable', [t.fname, t.lname, t.nickname]));
+        }
+
+        // แสดงผลวิชา
+        if (data.subjects) {
+            const tbody = document.querySelector("#subjectTable tbody");
+            tbody.innerHTML = "";
+            data.subjects.forEach(s => renderRow('subjectTable', [s.name, s.type]));
+        }
+
+        // แสดงผลจำนวนห้อง (วนลูปใส่ค่าใน Input)
+        if (data.rooms) {
+            for (let lvl in data.rooms) {
+                const input = document.getElementById(`room-${lvl}`);
+                if (input) input.value = data.rooms[lvl];
+            }
+        }
+        statusText.innerText = "โหลดข้อมูลล่าสุดสำเร็จ (เมื่อ " + (data.lastUpdated || "-") + ")";
+    });
+}
+
+// --- 3. ฟังก์ชันบันทึกข้อมูล (แบบ Manual) ---
+async function manualSaveData(event) {
+    if (event) event.preventDefault();
+    const btn = document.getElementById('btn-save-firebase');
     const statusText = document.getElementById('save-status-text');
 
-    // เปลี่ยนสถานะปุ่มเป็น Loading
-    saveBtn.disabled = true;
-    saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> กำลังบันทึกข้อมูล...';
-    statusText.innerText = "ระบบกำลังอัปโหลดข้อมูลรายชื่อครูและวิชาไปยังฐานข้อมูล...";
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> กำลังบันทึก...';
 
     try {
-        // 1. ดึงข้อมูลครูจากตาราง
+        // ดึงข้อมูลครู
         const teachers = [];
-        document.querySelectorAll('#teacherTable tbody tr').forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 2 && cells[0].innerText.trim() !== "") {
-                teachers.push({
-                    firstName: cells[0].innerText.trim(),
-                    lastName: cells[1].innerText.trim()
-                });
+        document.querySelectorAll("#teacherTable tbody tr").forEach(tr => {
+            const cells = tr.querySelectorAll("td");
+            if(cells.length >= 3 && cells[0].innerText.trim() !== "") {
+                teachers.push({ fname: cells[0].innerText.trim(), lname: cells[1].innerText.trim(), nickname: cells[2].innerText.trim() });
             }
         });
 
-        // 2. ดึงข้อมูลวิชาจากตาราง
+        // ดึงข้อมูลวิชา
         const subjects = [];
-        document.querySelectorAll('#subjectTable tbody tr').forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 2 && cells[0].innerText.trim() !== "") {
-                subjects.push({
-                    subjectName: cells[0].innerText.trim(),
-                    type: cells[1].innerText.trim()
-                });
+        document.querySelectorAll("#subjectTable tbody tr").forEach(tr => {
+            const cells = tr.querySelectorAll("td");
+            if(cells.length >= 2 && cells[0].innerText.trim() !== "") {
+                subjects.push({ name: cells[0].innerText.trim(), type: cells[1].innerText.trim() });
             }
         });
 
-        // 3. บันทึกลง Firebase
+        // ดึงข้อมูลจำนวนห้อง
+        const rooms = {};
+        const levels = ['P1','P2','P3','P4','P5','P6','M1','M2','M3','M4','M5','M6'];
+        levels.forEach(lvl => {
+            const val = document.getElementById(`room-${lvl}`)?.value;
+            rooms[lvl] = parseInt(val) || 0;
+        });
+
+        // ส่งขึ้น Firebase
         await db.ref('timetable_settings').set({
             teachers: teachers,
             subjects: subjects,
+            rooms: rooms,
             lastUpdated: new Date().toLocaleString('th-TH')
         });
 
-        // บันทึกสำเร็จ
-        statusText.innerHTML = '<span class="text-green-600">✅ บันทึกข้อมูลสำเร็จ! ระบบจำค่าล่าสุดไว้แล้ว</span>';
-        alert("บันทึกข้อมูลเข้าสู่ Firebase เรียบร้อยแล้วครับ!");
-
-    } catch (error) {
-        console.error("Firebase Save Error:", error);
-        statusText.innerHTML = '<span class="text-red-600">❌ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่อีกครั้ง</span>';
-        alert("บันทึกไม่สำเร็จ: " + error.message);
+        alert("✅ บันทึกข้อมูลเรียบร้อยแล้ว!");
+        statusText.innerText = "อัปเดตล่าสุด: " + new Date().toLocaleTimeString();
+    } catch (e) {
+        alert("❌ บันทึกไม่สำเร็จ: " + e.message);
     } finally {
-        // คืนค่าปุ่ม
-        saveBtn.disabled = false;
-        saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        saveBtn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-3"></i> บันทึกข้อมูลเข้า Firebase';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกข้อมูลทั้งหมดเข้าสู่ระบบ';
     }
 }
+
+// เรียกใช้ฟังก์ชันตอนโหลดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', () => {
+    // initRooms(); // ถ้ามีฟังก์ชันสร้าง Input ห้องเรียนให้เรียกที่นี่
+    loadDataFromFirebase();
+});
 
     </script>
 
