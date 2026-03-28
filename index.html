@@ -79,7 +79,7 @@
             <a href="javascript:void(0)" onclick="showSection('schedule')" id="menu-schedule" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-clock w-8 text-lg"></i> <span>จัดตารางเวลา</span>
             </a>
-            <a href="javascript:void(0)" onclick="showSection('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
+            <a href="javascript:void(0)" onclick="showPreview('preview')" id="menu-preview" class="sidebar-item flex items-center p-4 transition-all">
                 <i class="fas fa-th-list w-8 text-lg"></i> <span>ดูตารางเรียน</span>
             </a>
             <a href="javascript:void(0)" onclick="showTeacherScheduleSection()" id="menu-teacher-schedule" class="sidebar-item flex items-center p-4 transition-all">
@@ -756,14 +756,16 @@ let currentEditing = { period: null };
 
 // 1. ฟังก์ชันแสดงรายการคาบเรียน (ฝั่งขวา)
 function updatePeriodView() {
-    const roomFull = document.getElementById('assign-room').value; // ค่าคือ "ป.1/1"
-    const day = document.getElementById('assign-day').value;       // ค่าคือ "วันจันทร์"
+    const roomFull = document.getElementById('assign-room').value; // เช่น "ป.1/1"
+    const day = document.getElementById('assign-day').value;
     const grid = document.getElementById('period-grid');
     
-    if (!roomFull || !day) return;
+    if (!roomFull || !day || !grid) return;
 
     grid.innerHTML = "";
-    const level = roomFull.split('/')[0]; // ดึง "ป.1"
+    
+    // ดึงเฉพาะ "ป.1" จาก "ป.1/1"
+    const level = roomFull.split('/')[0]; 
     const config = timeConfigsByLevel[level];
 
     if (!config) {
@@ -771,53 +773,71 @@ function updatePeriodView() {
         return;
     }
 
-    config.forEach(item => {
-        // ค้นหาข้อมูลจาก Array ใหญ่ที่เพิ่งบันทึกไป
-        const saved = finalSchedule.find(s => 
-            s.room === roomFull && 
-            s.day === day && 
-            s.period === item.period
-        );
+    // แปลงชื่อห้องให้ตรงกับ Path ใน Firebase (ป.1 -> ป_1)
+    const cleanRoom = level.replace(/\./g, '_');
+    
+    // ดึงเฉพาะตัวเลขห้อง (เช่น /1) หรือกำหนดเป็นค่าเริ่มต้นถ้าไม่มี
+    const roomNumberMatch = roomFull.match(/\/(\d+)/);
+    const roomNumber = roomNumberMatch ? roomNumberMatch[1] : '1';
 
-        const isRest = (item.type !== 'teach');
-        const row = document.createElement('div');
-        
-        // ปรับแต่งการแสดงผลถ้ามีข้อมูล (Saved)
-        row.className = `flex items-center justify-between p-4 rounded-2xl border mb-2 transition-all ${
-            saved ? 'bg-blue-50 border-blue-200 shadow-sm' : (isRest ? 'bg-gray-50' : 'bg-white border-gray-100')
-        }`;
-        
-        row.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="text-xl font-black ${saved ? 'text-blue-600' : 'text-gray-300'} w-8">${item.period}</div>
-                <div>
-                    <div class="text-[10px] font-bold text-gray-400">${item.start} - ${item.end} น.</div>
-                    <div class="font-bold text-slate-700">
-                        ${isRest ? '<span class="text-orange-400">☕ พักเบรก</span>' : 
-                          (saved ? `<span class="text-blue-700">${saved.subject}</span> <span class="text-slate-400 text-sm ml-2">👤 ครู${saved.teacher}</span>` : 'ว่าง / ยังไม่ได้จัดวิชา')}
+    // Path อ้างอิงจากรูป Firebase: timetable_assignments -> ป_1 -> 1 -> จันทร์
+    const assignmentsRef = db.ref(`timetable_assignments/${cleanRoom}/${roomNumber}/${day}`);
+
+    // ไปดึงข้อมูลมาจาก Firebase ตรงๆ
+    assignmentsRef.once('value').then((snapshot) => {
+        const assignmentsData = snapshot.val() || {}; // ถ้าไม่มีข้อมูลให้เป็น object ว่าง
+
+        config.forEach(item => {
+            // เช็คว่ามีข้อมูลของคาบนี้ใน Firebase ไหม
+            const periodKey = `period_${item.period}`;
+            const saved = assignmentsData[periodKey];
+
+            const isRest = (item.type !== 'teach');
+            const row = document.createElement('div');
+            
+            row.className = `flex items-center justify-between p-4 rounded-2xl border mb-2 transition-all ${
+                saved ? 'bg-blue-50 border-blue-200 shadow-sm' : (isRest ? 'bg-gray-50' : 'bg-white border-gray-100')
+            }`;
+            
+            row.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="text-xl font-black ${saved ? 'text-blue-600' : 'text-gray-300'} w-8">${item.period}</div>
+                    <div>
+                        <div class="text-[10px] font-bold text-gray-400">${item.start} - ${item.end} น.</div>
+                        <div class="font-bold text-slate-700">
+                            ${isRest ? '<span class="text-orange-400">☕ พักเบรก</span>' : 
+                              (saved ? `<span class="text-blue-700">${saved.subject}</span> <span class="text-slate-400 text-sm ml-2">👤 ครู${saved.teacher}</span>` : 'ว่าง / ยังไม่ได้จัดวิชา')}
+                        </div>
                     </div>
                 </div>
-            </div>
-            ${isRest ? '' : `
-                <button onclick="openAssignModal(${item.period})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    saved ? 'bg-amber-500 text-white shadow-md' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
-                }">
-                    ${saved ? 'แก้ไข' : '+ เลือกสอน'}
-                </button>
-            `}
-        `;
-        grid.appendChild(row);
+                ${isRest ? '' : `
+                    <button onclick="openAssignModal(${item.period})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        saved ? 'bg-amber-500 text-white shadow-md' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
+                    }">
+                        ${saved ? 'แก้ไข' : '+ เลือกสอน'}
+                    </button>
+                `}
+            `;
+            grid.appendChild(row);
+        });
+    }).catch((error) => {
+        console.error("Error fetching assignments:", error);
+        grid.innerHTML = `<p class="text-center py-10 text-red-400">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>`;
     });
 }
 
 // 2. เปิด Modal เพื่อเลือกวิชา/ครู
+
 function openAssignModal(period) {
-    currentEditing.period = period;
+    // เก็บค่าคาบที่เลือกไว้ในตัวแปร Global
+    currentEditing.period = period; 
+    
     document.getElementById('modal-title').innerText = `จัดวิชา คาบที่ ${period}`;
     
-    // ดึงข้อมูลเดิมมาโชว์ (ถ้ามี)
     const room = document.getElementById('assign-room').value;
     const day = document.getElementById('assign-day').value;
+    
+    // ค้นหาข้อมูลเดิมจากอาเรย์ (ถ้ามี)
     const saved = finalSchedule.find(s => s.room === room && s.day === day && s.period === period);
     
     if(saved) {
@@ -828,18 +848,21 @@ function openAssignModal(period) {
         document.getElementById('assign-teacher').value = "";
     }
 
-    document.getElementById('assign-modal').classList.remove('hidden');
-    document.getElementById('assign-modal').classList.add('flex');
+    // แสดง Modal
+    const modal = document.getElementById('assign-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 
-function closeModal() {
-    document.getElementById('assign-modal').classList.add('hidden');
-    document.getElementById('assign-modal').classList.remove('flex');
-}
+async function confirmAssignment(event) {
+    if(event) event.preventDefault(); 
 
-// 3. บันทึกข้อมูลลงตาราง (พร้อมเช็คครูสอนซ้ำ)
-function confirmAssignment() {
-    if(event) event.preventDefault(); // ป้องกันการรีเฟรชหน้า
+    // ตรวจสอบว่ามีค่า period หรือไม่
+    if (!currentEditing.period) {
+        alert("⚠️ เกิดข้อผิดพลาด: ไม่พบข้อมูลคาบเรียน กรุณาปิดหน้าต่างแล้วลองใหม่");
+        return;
+    }
+
     const room = document.getElementById('assign-room').value;
     const day = document.getElementById('assign-day').value;
     const subject = document.getElementById('assign-subject').value;
@@ -850,19 +873,50 @@ function confirmAssignment() {
         return;
     }
 
-    // ลบข้อมูลเก่าในคาบนั้นออก (ถ้ามี) แล้วใส่ใหม่
-    finalSchedule = finalSchedule.filter(s => !(s.room === room && s.day === day && s.period === currentEditing.period));
-    
-    finalSchedule.push({
-        room, day, period: currentEditing.period, subject, teacher
-    });
+    // เตรียมข้อมูลและล้างชื่อห้องที่มีจุด (ป.1 -> ป_1)
+    const cleanRoom = room.replace(/\./g, '_');
+    const periodData = {
+        room: room,
+        day: day,
+        period: currentEditing.period,
+        subject: subject,
+        teacher: teacher,
+        lastUpdated: new Date().toISOString()
+    };
 
-    closeModal();
-    updatePeriodView(); // อัปเดต UI ทันที
-    if (document.getElementById('preview').classList.contains('hidden') === false) {
-        renderMasterTable();
+    try {
+        // บันทึกลง Firebase Path: timetable_assignments/ห้อง/วัน/คาบ
+        const path = `timetable_assignments/${cleanRoom}/${day}/period_${currentEditing.period}`;
+        await db.ref(path).set(periodData);
+
+        // อัปเดตข้อมูลในเครื่อง (Local Array)
+        finalSchedule = finalSchedule.filter(s => !(s.room === room && s.day === day && s.period === currentEditing.period));
+        finalSchedule.push(periodData);
+
+        alert("✅ บันทึกลงตารางสอนเรียบร้อย");
+        closeModal();
+        
+        if (typeof updatePeriodView === "function") updatePeriodView();
+        
+    } catch (error) {
+        console.error("Firebase Save Error:", error);
+        alert("❌ ไม่สามารถบันทึกได้: " + error.message);
+    }
+    finalSchedule = finalSchedule.filter(s => 
+    !(s.room === room && s.day === day && s.period === currentEditing.period)
+);
+finalSchedule.push(periodData);
+
+}
+
+function closeModal() {
+    const modal = document.getElementById('assign-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
     }
 }
+
 
 // ฟังก์ชันติ๊กเปิด/ปิดเวลาพัก (แยกตามห้อง)
 function toggleBreak(room, period, isChecked) {
@@ -949,7 +1003,9 @@ function generateManualFields() {
 }
 
 // 4. ฟังก์ชันบันทึกข้อมูล (กดปุ่ม "บันทึกโครงสร้างเวลาเรียน")
-function confirmManualTimes() {
+async function confirmManualTimes(event) {
+    if (event) event.preventDefault();
+    
     const checkboxes = document.querySelectorAll('.level-chk:checked');
     const selectedLevels = Array.from(checkboxes).map(chk => chk.value);
     const count = parseInt(document.getElementById('periodCount').value);
@@ -959,25 +1015,46 @@ function confirmManualTimes() {
         return;
     }
 
+    // --- 1. ส่วนที่หายไป: ต้องดึงข้อมูลจากช่องกรอกเวลามาใส่ใน currentConfig ---
     let currentConfig = [];
     for (let i = 1; i <= count; i++) {
-        const start = document.getElementById(`start-p-${i}`).value;
-        const end = document.getElementById(`end-p-${i}`).value;
-        const type = document.getElementById(`type-p-${i}`).value;
+        const start = document.getElementById(`start-p-${i}`).value; // ดึงเวลาเริ่ม
+        const end = document.getElementById(`end-p-${i}`).value;     // ดึงเวลาเลิก
+        const type = document.getElementById(`type-p-${i}`).value;   // ดึงประเภท (เรียน/พัก)
 
-        currentConfig.push({ period: i, start, end, type });
+        currentConfig.push({ 
+            period: i, 
+            start: start, 
+            end: end, 
+            type: type 
+        });
     }
-    
-    // บันทึกข้อมูลเข้าตัวแปร
-    selectedLevels.forEach(lvl => {
-        timeConfigsByLevel[lvl] = JSON.parse(JSON.stringify(currentConfig));
-    });
-    
-    alert(`✅ บันทึกเวลาให้ชั้น ${selectedLevels.join(', ')} เรียบร้อยแล้ว`);
-    
-    // อัปเดตตารางฝั่งขวา (ถ้ามีฟังก์ชัน updatePeriodView)
-    if (typeof updatePeriodView === "function") {
-        updatePeriodView(); 
+    // -----------------------------------------------------------
+
+    try {
+        const updates = {};
+        selectedLevels.forEach(lvl => {
+            // เปลี่ยนจุดเป็นขีดล่างสำหรับ Firebase (ป.1 -> ป_1)
+            const cleanLvl = lvl.replace(/\./g, '_'); 
+            
+            // ใช้ currentConfig ที่เราวนลูปดึงค่ามาเมื่อกี้
+            updates[`timetable_data/time_configs/${cleanLvl}`] = currentConfig;
+
+            if(typeof timeConfigsByLevel !== 'undefined') {
+                timeConfigsByLevel[lvl] = JSON.parse(JSON.stringify(currentConfig));
+            }
+        });
+
+        // ส่งข้อมูลขึ้น Firebase
+        await db.ref().update(updates);
+        
+        alert(`✅ บันทึกเวลาให้ชั้น ${selectedLevels.join(', ')} สำเร็จ!`);
+        
+        if (typeof updatePeriodView === "function") updatePeriodView(); 
+
+    } catch (error) {
+        console.error("Error details:", error);
+        alert("❌ เกิดข้อผิดพลาด: " + error.message);
     }
 }
 
@@ -1064,16 +1141,22 @@ function renderMasterTable() {
     const header = document.getElementById('table-header');
     const body = document.getElementById('table-body');
     
-    const roomShort = roomSelect ? roomSelect.value : ""; // ค่าที่ได้คือ "ป.1/1"
+    const roomShort = roomSelect ? roomSelect.value : ""; // ค่าที่ได้คือ เช่น "ป.1/1"
     
-    if (!roomShort) return;
+    if (!roomShort) {
+        body.innerHTML = `<tr><td class='p-10 text-center text-slate-300 italic'>กรุณาเลือกห้องเรียน...</td></tr>`;
+        return;
+    }
 
-    // --- ส่วนแก้ไข: แยก ป.1/1 ออกเป็น ป.1 และ 1 ---
-    const parts = roomShort.split('/'); // แยกด้วยเครื่องหมาย /
-    const levelName = parts[0]; // จะได้ "ป.1"
-    const roomNumber = parts[1]; // จะได้ "1"
+    // 1. เตรียมข้อมูลเพื่ออ้างอิง Path ใน Firebase
+    const parts = roomShort.split('/'); 
+    const levelName = parts[0]; // "ป.1"
+    const roomNumber = parts[1] || "1"; // "1"
+    
+    // แปลง ป.1 เป็น ป_1 เพื่อใช้เป็น Path ใน Firebase
+    const cleanRoomPath = levelName.replace(/\./g, '_'); 
 
-    // 1. ดึง Config เวลาโดยใช้ levelName (ป.1)
+    // ดึง Config เวลาโดยใช้ levelName (ป.1)
     const config = (typeof timeConfigsByLevel !== 'undefined') ? timeConfigsByLevel[levelName] || [] : [];
 
     // 2. แสดงชื่อหัวตาราง
@@ -1084,91 +1167,174 @@ function renderMasterTable() {
     }
     roomTitle.innerText = fullText;
 
-    // 3. วาดหัวตาราง (เหมือนเดิม)
-    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-xs font-black">วัน / เวลา</th>`;
+    if (config.length === 0) {
+        body.innerHTML = `<tr><td class='p-10 text-center text-slate-400 font-bold'>ยังไม่ได้ตั้งค่าโครงสร้างเวลาเรียนของ ${levelName}</td></tr>`;
+        header.innerHTML = "";
+        return;
+    }
+
+    // แสดงสถานะกำลังโหลด
+    body.innerHTML = `<tr><td colspan="${config.length + 1}" class='p-10 text-center text-blue-500 font-bold animate-pulse'>กำลังโหลดข้อมูล...</td></tr>`;
+
+    // 3. วาดหัวตาราง (ดึงจาก Config)
+    let headerHtml = `<th class="border border-slate-300 p-3 bg-slate-100 text-xs font-black text-slate-600 w-24 rounded-tl-lg">วัน / เวลา</th>`;
     config.forEach(slot => {
         headerHtml += `
-            <th class="border-2 border-slate-300 p-2 text-center bg-amber-50">
-                <div class="text-amber-700 font-black text-sm">${slot.start} - ${slot.end}</div>
-                <div class="text-[9px] text-slate-400 font-bold uppercase">${slot.type === 'break' ? 'พัก' : 'คาบ '+slot.period}</div>
+            <th class="border border-slate-300 p-3 text-center bg-amber-50 min-w-[120px] shadow-sm">
+                <div class="text-amber-800 font-black text-sm">${slot.start} - ${slot.end} น.</div>
+                <div class="text-[10px] text-amber-600/80 font-bold uppercase mt-1">
+                    ${slot.type === 'teach' ? 'คาบ ' + slot.period : 'พักเบรก'}
+                </div>
             </th>`;
     });
-    header.innerHTML = headerHtml;
+    header.innerHTML = `<tr>${headerHtml}</tr>`;
 
-    // 4. วาดเนื้อหาตาราง
-    const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
-    body.innerHTML = "";
+    // 4. ดึงข้อมูลจาก Firebase ตรงๆ
+    // เข้าถึง Path: timetable_assignments -> ป_1 -> 1
+    const roomRef = db.ref(`timetable_assignments/${cleanRoomPath}/${roomNumber}`);
 
-    days.forEach(dayName => {
-        const tr = document.createElement('tr');
-        tr.className = "h-24";
-        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50">${dayName}</td>`;
+    roomRef.once('value').then((snapshot) => {
+        const roomData = snapshot.val() || {}; // ถ้าไม่มีข้อมูลเลยจะได้ Object ว่าง
 
-        config.forEach(slot => {
-            if (slot.type === 'break') {
-                rowHtml += `<td class="border-2 border-slate-300 bg-orange-50/20 text-center uppercase text-[10px] font-black text-orange-400">BREAK</td>`;
-            } else {
-                // 🔥 จุดสำคัญ: ค้นหาโดยเช็คค่าที่บันทึกไว้ (ป.1/1)
-                const match = finalSchedule.find(s => 
-                    s.room === roomShort && // เช็คคำว่า "ป.1/1"
-                    s.day === dayName && 
-                    s.period === slot.period
-                );
-                
-                if (match) {
-                    rowHtml += `
-                        <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white">
-                            <div class="font-black text-slate-800 text-sm leading-tight">${match.subject}</div>
-                            <div class="text-[10px] font-bold text-blue-500 mt-2">ครู${match.teacher}</div>
-                        </td>`;
-                } else {
-                    rowHtml += `<td class="border-2 border-slate-300 p-2 bg-white/50"></td>`;
+        // 5. วาดเนื้อหาตาราง 5 วัน
+        const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+        body.innerHTML = "";
+
+        days.forEach(dayName => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-slate-50 transition-colors duration-150 h-24";
+            
+            let rowHtml = `<td class="border border-slate-300 p-3 font-bold text-center bg-slate-50 text-slate-700 shadow-sm">${dayName}</td>`;
+
+            // ข้อมูลของวันนั้นๆ (เช่น จันทร์)
+            const dayData = roomData[dayName] || {};
+
+            config.forEach(slot => {
+                // ถ้าเป็นเวลาพัก
+                if (slot.type !== 'teach') {
+                    rowHtml += `<td class="border border-slate-300 bg-orange-50/40 text-center uppercase text-[11px] font-black text-orange-500 tracking-widest">พักเบรก</td>`;
+                } 
+                // ถ้าเป็นคาบสอน
+                else {
+                    const periodKey = `period_${slot.period}`;
+                    const match = dayData[periodKey]; // ค้นหาจาก Firebase Data โดยตรง
+
+                    if (match) {
+                        rowHtml += `
+                            <td class="border border-slate-300 p-2 text-center align-middle bg-white hover:bg-blue-50/30 transition-all cursor-default">
+                                <div class="font-black text-blue-800 text-sm mb-1">${match.subject}</div>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    ครู${match.teacher}
+                                </span>
+                            </td>`;
+                    } else {
+                        // ช่องว่าง (ยังไม่ได้จัดวิชา)
+                        rowHtml += `<td class="border border-slate-300 bg-slate-50/20"></td>`;
+                    }
                 }
-            }
+            });
+            tr.innerHTML = rowHtml;
+            body.appendChild(tr);
         });
-        tr.innerHTML = rowHtml;
-        body.appendChild(tr);
+
+    }).catch((error) => {
+        console.error("Error fetching room schedule from Firebase:", error);
+        body.innerHTML = `<tr><td colspan="${config.length + 1}" class='p-10 text-center text-red-500 font-bold'>เกิดข้อผิดพลาดในการโหลดข้อมูลจากฐานข้อมูล</td></tr>`;
     });
 }
 
 function exportTableToImage() {
-    // 1. ดึง Element ส่วนที่ต้องการถ่ายภาพ (แผ่นกระดาษตารางเรียน)
-    const element = document.querySelector('.bg-white.p-8.rounded-\\[2rem\\].shadow-2xl.border');
+    // 1. ค้นหา Element ที่ต้องการ (ปรับให้รองรับทั้งหน้าตารางห้องเรียน และหน้าตารางครู)
+    // แนะนำ: ถ้าเป็นไปได้ ให้ไปเพิ่ม id="export-container" ไว้ที่ div ชั้นนอกสุดของตารางเพื่อความแม่นยำ
+    const element = document.getElementById('export-container') || 
+                    document.querySelector('.bg-white.p-8') || 
+                    document.getElementById('teacher-schedule-container');
 
     if (!element) {
-        alert("ไม่พบส่วนที่ต้องการส่งออก กรุณาตรวจสอบ HTML");
+        alert("ไม่พบส่วนที่ต้องการส่งออก กรุณาตรวจสอบข้อมูลบนหน้าจอ");
         return;
     }
 
-    // 2. ใช้ html2canvas จับภาพ
-    html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff"
-    }).then(canvas => {
-        // 3. แปลง Canvas เป็น Data URL (PNG)
-        const image = canvas.toDataURL("image/png");
+    // แจ้งเตือนผู้ใช้ระหว่างรอ
+    const btn = event ? event.currentTarget : null;
+    const originalBtnText = btn ? btn.innerHTML : '';
+    if (btn) btn.innerHTML = '<span class="animate-pulse">⏳ กำลังสร้างรูปภาพ...</span>';
 
-        // 4. สร้างลิงก์ชั่วคราวเพื่อดาวน์โหลด
+    // 2. โคลน Element (ก๊อปปี้) เพื่อนำไปจัดทรงใหม่โดยไม่กระทบหน้าเว็บจริง
+    const clone = element.cloneNode(true);
+    
+    // 3. สร้าง Wrapper (กระดาษรองหลังสีขาว)
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.top = '-9999px'; // ซ่อนไว้ไม่ให้ผู้ใช้เห็นตอนกระพริบ
+    wrapper.style.left = '-9999px';
+    wrapper.style.width = element.offsetWidth + 'px'; // ล็อกความกว้างให้เท่าหน้าจอเดิม
+    wrapper.style.padding = '60px'; // ** เพิ่มขอบกระดาษให้ดูโปร่งและแพงขึ้น **
+    wrapper.style.backgroundColor = '#ffffff'; // พื้นหลังสีขาวล้วน
+    
+    // 4. ลบเงาและขอบมนของหน้าเว็บออก เพื่อให้ภาพแบนราบคมชัดเหมือนเอกสาร
+    clone.style.boxShadow = 'none';
+    clone.style.border = 'none';
+    clone.style.margin = '0';
+    clone.style.borderRadius = '0';
+
+    // 5. (ทางเลือก) เพิ่ม Footer เล็กๆ ด้านล่างของเอกสาร
+    const footer = document.createElement('div');
+    footer.innerHTML = `
+        <div style="text-align: right; color: #cbd5e1; font-size: 14px; margin-top: 30px; font-weight: bold; font-family: sans-serif;">
+            Exported from PSV Timetable System
+        </div>
+    `;
+
+    // ประกอบร่าง
+    wrapper.appendChild(clone);
+    wrapper.appendChild(footer);
+    document.body.appendChild(wrapper);
+
+    // 6. ตั้งค่าการถ่ายภาพให้เป็นโหมด Hi-Res (HD)
+    html2canvas(wrapper, {
+        scale: 3, // อัปเกรดความคมชัดจาก 2 เป็น 3 (ซูมแล้วไม่แตก)
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false
+    }).then(canvas => {
+        // ถ่ายเสร็จ ลบกระดาษจำลองทิ้ง
+        document.body.removeChild(wrapper);
+
+        // แปลงเป็นภาพคุณภาพสูงสุด
+        const image = canvas.toDataURL("image/png", 1.0);
+        
+        // 7. ตั้งชื่อไฟล์อัจฉริยะ (อ่านจากหัวข้อตาราง)
+        const roomNameEl = document.getElementById('full-room-title');
+        const teacherNameEl = document.getElementById('teacher-display-name');
+        
+        let fileName = "ตารางสอน";
+        if (roomNameEl && roomNameEl.innerText) {
+            fileName = roomNameEl.innerText;
+        } else if (teacherNameEl && teacherNameEl.innerText) {
+            fileName = teacherNameEl.innerText;
+        }
+        
+        // คลีนชื่อไฟล์ไม่ให้มีอักขระแปลกๆ
+        const cleanFileName = fileName.replace(/[\/\s]/g, '_').replace('กรุณาระบุชื่อครู', 'ว่าง');
+
+        // สั่งดาวน์โหลด
         const link = document.createElement('a');
-        
-        // ตั้งชื่อไฟล์
-        const roomName = document.getElementById('full-room-title').innerText.replace(/[\/\s]/g, '-');
-        link.download = `ตารางเรียน_${roomName}_2569.png`;
-        
+        link.download = `${cleanFileName}_2569.png`;
         link.href = image;
         document.body.appendChild(link);
-        
-        // 5. สั่งคลิกลิงก์เพื่อดาวน์โหลด
         link.click();
-        
-        // 6. ลบลิงก์ทิ้ง
         document.body.removeChild(link);
+
+        // คืนค่าปุ่ม
+        if (btn) btn.innerHTML = originalBtnText;
+
     }).catch(err => {
+        document.body.removeChild(wrapper);
+        if (btn) btn.innerHTML = originalBtnText;
         alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ: " + err.message);
     });
 }
-
 function updatePreviewRoomDropdown() {
     const select = document.getElementById('preview-room-select');
     if (!select) return;
@@ -1284,128 +1450,157 @@ function updateTeacherDropdown() {
 }
 
 function renderTeacherTable() {
-    // 1. เปลี่ยนจาก 'teacher-search-input' เป็น 'teacher-select' ให้ตรงกับ HTML ของคุณ
+    // 1. ดึงชื่อครูที่ถูกเลือก
     const teacherSelect = document.getElementById('teacher-select');
     const selectedTeacher = teacherSelect ? teacherSelect.value.trim() : "";
     
-    // 2. ตรวจสอบ ID ส่วนแสดงผล (ใน HTML ของคุณใช้ teacher-display-name)
+    // 2. ดึง Elements สำหรับแสดงผล
     const displayName = document.getElementById('teacher-display-name');
     const header = document.getElementById('teacher-table-header');
     const body = document.getElementById('teacher-table-body');
-    
-    // Elements สำหรับสรุปผล (ที่คุณเพิ่มเข้าไปก่อนหน้านี้)
     const totalSlotsEl = document.getElementById('total-teaching-slots');
     const totalHoursEl = document.getElementById('total-teaching-hours');
     const totalMinsEl = document.getElementById('total-teaching-mins');
 
+    // เคลียร์หน้าจอถ้ายังไม่ได้เลือกครู
     if (!selectedTeacher) {
-        displayName.innerText = "กรุณาเลือกรายชื่อครู";
-        body.innerHTML = "<tr><td class='p-10 text-center text-slate-300 italic'>รอการเลือกรายชื่อ...</td></tr>";
+        displayName.innerText = "กรุณาระบุชื่อครู";
+        body.innerHTML = `<tr><td class='p-10 text-center text-slate-300 italic'>กรุณาเลือกรายชื่อครูเพื่อดูตารางสอน...</td></tr>`;
         header.innerHTML = "";
         if(totalSlotsEl) totalSlotsEl.innerText = "0";
+        if(totalHoursEl) totalHoursEl.innerText = "0";
+        if(totalMinsEl) totalMinsEl.innerText = "0";
         return;
     }
 
-    // 3. กรองข้อมูลจาก finalSchedule
-    const teacherSchedules = finalSchedule.filter(s => s.teacher.trim() === selectedTeacher);
-    displayName.innerText = "คุณครู" + selectedTeacher;
+    displayName.innerText = "กำลังโหลดข้อมูล...";
 
-    if (teacherSchedules.length === 0) {
-        body.innerHTML = "<tr><td class='p-10 text-center text-slate-400 font-bold'>ไม่พบภาระการสอนในระบบ</td></tr>";
-        header.innerHTML = "";
-        return;
-    }
+    // 3. ดึงข้อมูลจาก Firebase ตรงๆ (Path: timetable_assignments)
+    db.ref('timetable_assignments').once('value').then((snapshot) => {
+        const data = snapshot.val();
+        let teacherSchedules = [];
 
-    // 4. คำนวณเวลาและรวบรวม Time Slots
-    let totalMinutes = 0;
-let timeSlots = [];
-
-teacherSchedules.forEach(s => {
-    const level = s.room.split('/')[0];
-    const config = timeConfigsByLevel[level] || [];
-    const slotDetail = config.find(c => c.period == s.period);
-    
-    if (slotDetail) {
-        // --- แก้ไขจุดนี้: ถ้านักเรียนมีวิชาเรียน (match) ให้นับเวลาทันที ---
-        const startArr = slotDetail.start.split(':').map(Number);
-        const endArr = slotDetail.end.split(':').map(Number);
-        const diff = (endArr[0] * 60 + endArr[1]) - (startArr[0] * 60 + startArr[1]);
-        
-        totalMinutes += diff;
-
-        timeSlots.push({
-            start: slotDetail.start,
-            end: slotDetail.end,
-            sortKey: parseInt(slotDetail.start.replace(':', ''))
-        });
-    }
-});
-
-// แสดงผลลัพธ์
-if(totalSlotsEl) totalSlotsEl.innerText = teacherSchedules.length;
-if(totalHoursEl) totalHoursEl.innerText = Math.floor(totalMinutes / 60);
-if(totalMinsEl) totalMinsEl.innerText = totalMinutes % 60;
-
-    // แสดงสรุปชั่วโมงสอน
-    if(totalSlotsEl) totalSlotsEl.innerText = teacherSchedules.length;
-    if(totalHoursEl) totalHoursEl.innerText = Math.floor(totalMinutes / 60);
-    if(totalMinsEl) totalMinsEl.innerText = totalMinutes % 60;
-
-    // 5. จัดการหัวตาราง (Unique Time)
-    timeSlots.sort((a, b) => a.sortKey - b.sortKey);
-    const uniqueSlots = [];
-    const map = new Map();
-    for (const item of timeSlots) {
-        const key = item.start + "-" + item.end;
-        if(!map.has(key)){
-            map.set(key, true);
-            uniqueSlots.push(item);
-        }
-    }
-
-    // วาด Header
-    let headerHtml = `<th class="border-2 border-slate-300 p-2 bg-slate-100 text-[10px] font-black w-24">วัน / เวลา</th>`;
-    uniqueSlots.forEach(slot => {
-        headerHtml += `<th class="border-2 border-slate-300 p-2 text-center bg-indigo-50 min-w-[120px] text-indigo-700 font-black text-xs">${slot.start} - ${slot.end}</th>`;
-    });
-    header.innerHTML = headerHtml;
-
-    // 6. วาดตาราง 5 วัน
-    const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
-    body.innerHTML = "";
-    days.forEach(dayName => {
-        const tr = document.createElement('tr');
-        tr.className = "h-24";
-        let rowHtml = `<td class="border-2 border-slate-300 p-2 font-black text-center bg-slate-50 text-slate-500 text-xs">${dayName}</td>`;
-
-        uniqueSlots.forEach(slot => {
-            const match = teacherSchedules.find(s => {
-                const level = s.room.split('/')[0];
-                const config = timeConfigsByLevel[level] || [];
-                const d = config.find(c => c.period == s.period);
-                return s.day === dayName && d && d.start === slot.start && d.end === slot.end;
+        // 3.1 วนลูปค้นหาข้อมูลของครูที่เลือกจากทุกห้อง ทุกวัน ทุกคาบ
+        if (data) {
+            Object.keys(data).forEach(roomKey => { // เช่น ป_1
+                const roomData = data[roomKey];
+                Object.keys(roomData).forEach(roomNumber => { // เช่น 1
+                    const numData = roomData[roomNumber];
+                    Object.keys(numData).forEach(day => { // เช่น จันทร์
+                        const dayData = numData[day];
+                        Object.keys(dayData).forEach(pKey => { // เช่น period_1
+                            const assignment = dayData[pKey];
+                            // เช็คว่าใช่ครูคนนี้ไหม
+                            if (assignment && assignment.teacher && assignment.teacher.trim() === selectedTeacher) {
+                                teacherSchedules.push(assignment);
+                            }
+                        });
+                    });
+                });
             });
+        }
 
-            if (match) {
-                rowHtml += `
-                    <td class="border-2 border-slate-300 p-2 text-center align-middle bg-white shadow-sm">
-                        <div class="font-black text-indigo-900 text-sm leading-tight">${match.subject}</div>
-                        <div class="mt-2 inline-block px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">ห้อง ${match.room}</div>
-                    </td>`;
-            } else {
-                rowHtml += `<td class="border-2 border-slate-300 bg-slate-50/20"></td>`;
+        displayName.innerText = "คุณครู " + selectedTeacher;
+
+        // 3.2 ถ้าครูคนนี้ไม่มีสอนเลย
+        if (teacherSchedules.length === 0) {
+            body.innerHTML = `<tr><td colspan="6" class='p-10 text-center text-slate-400 font-bold'>ไม่พบภาระการสอนในระบบของ ${selectedTeacher}</td></tr>`;
+            header.innerHTML = "";
+            if(totalSlotsEl) totalSlotsEl.innerText = "0";
+            if(totalHoursEl) totalHoursEl.innerText = "0";
+            if(totalMinsEl) totalMinsEl.innerText = "0";
+            return;
+        }
+
+        // 4. คำนวณเวลาและรวบรวม Time Slots
+        let totalMinutes = 0;
+        let timeSlots = [];
+
+        teacherSchedules.forEach(s => {
+            const level = s.room.split('/')[0]; // ดึง ป.1 จาก ป.1/1
+            const config = timeConfigsByLevel[level] || [];
+            const slotDetail = config.find(c => Number(c.period) === Number(s.period));
+            
+            if (slotDetail) {
+                const startArr = slotDetail.start.split(':').map(Number);
+                const endArr = slotDetail.end.split(':').map(Number);
+                const diff = (endArr[0] * 60 + endArr[1]) - (startArr[0] * 60 + startArr[1]);
+                
+                totalMinutes += diff;
+
+                timeSlots.push({
+                    start: slotDetail.start,
+                    end: slotDetail.end,
+                    sortKey: parseInt(slotDetail.start.replace(':', ''))
+                });
             }
         });
-        tr.innerHTML = rowHtml;
-        body.appendChild(tr);
+
+        // แสดงสรุปชั่วโมงสอน
+        if(totalSlotsEl) totalSlotsEl.innerText = teacherSchedules.length;
+        if(totalHoursEl) totalHoursEl.innerText = Math.floor(totalMinutes / 60);
+        if(totalMinsEl) totalMinsEl.innerText = totalMinutes % 60;
+
+        // 5. จัดการหัวตาราง (Unique Time)
+        timeSlots.sort((a, b) => a.sortKey - b.sortKey);
+        const uniqueSlots = [];
+        const map = new Map();
+        for (const item of timeSlots) {
+            const key = item.start + "-" + item.end;
+            if(!map.has(key)){
+                map.set(key, true);
+                uniqueSlots.push(item);
+            }
+        }
+
+        // วาด Header
+        let headerHtml = `<th class="border border-slate-300 p-3 bg-slate-100 text-xs font-black text-slate-600 w-24 rounded-tl-lg">วัน / เวลา</th>`;
+        uniqueSlots.forEach(slot => {
+            headerHtml += `<th class="border border-slate-300 p-3 text-center bg-blue-50 text-blue-800 font-bold text-xs min-w-[140px] shadow-sm">${slot.start} - ${slot.end} น.</th>`;
+        });
+        header.innerHTML = `<tr>${headerHtml}</tr>`;
+
+        // 6. วาดตาราง 5 วัน
+        const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+        body.innerHTML = "";
+        
+        days.forEach(dayName => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-slate-50 transition-colors duration-150";
+            let rowHtml = `<td class="border border-slate-300 p-3 font-bold text-center bg-slate-50 text-slate-700 shadow-sm">${dayName}</td>`;
+
+            uniqueSlots.forEach(slot => {
+                // ค้นหาวิชาที่ครูสอนในวันและเวลานี้
+                const match = teacherSchedules.find(s => {
+                    const level = s.room.split('/')[0];
+                    const config = timeConfigsByLevel[level] || [];
+                    const d = config.find(c => Number(c.period) === Number(s.period));
+                    return s.day === dayName && d && d.start === slot.start && d.end === slot.end;
+                });
+
+                if (match) {
+                    rowHtml += `
+                        <td class="border border-slate-300 p-2 text-center align-middle bg-white hover:bg-blue-50/50 transition-all cursor-default">
+                            <div class="font-black text-blue-700 text-sm mb-1">${match.subject}</div>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                ชั้น ${match.room}
+                            </span>
+                        </td>`;
+                } else {
+                    rowHtml += `<td class="border border-slate-300 bg-slate-50/30"></td>`; // ช่องว่าง
+                }
+            });
+            tr.innerHTML = rowHtml;
+            body.appendChild(tr);
+        });
+
+    }).catch((error) => {
+        console.error("Error fetching teacher schedule from Firebase:", error);
+        displayName.innerText = "เกิดข้อผิดพลาดในการโหลดข้อมูล";
+        body.innerHTML = `<tr><td class='p-10 text-center text-red-500 font-bold'>ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง</td></tr>`;
     });
 }
 
-function showTeacherSchedule() {
-    showSection('teacher-schedule');
-    // อัปเดตรายชื่ออีกครั้งเพื่อความแน่ใจ
-    updateTeacherDropdown();
-}
 function exportTeacherTableToImage() {
     // 1. ดึง Element ที่ต้องการจะถ่ายรูป
     const element = document.getElementById('teacher-print-area');
@@ -1641,6 +1836,187 @@ async function manualSaveData(event) {
 document.addEventListener('DOMContentLoaded', () => {
     // initRooms(); // ถ้ามีฟังก์ชันสร้าง Input ห้องเรียนให้เรียกที่นี่
     loadDataFromFirebase();
+});
+
+// --- ฟังก์ชันดึงข้อมูลจาก Firebase มาแสดงบนหน้าจอ ---
+function loadTimetableData() {
+    console.log("กำลังดึงข้อมูลจาก Firebase...");
+    
+    // 1. ดึงข้อมูลโครงสร้างเวลา (Time Configs)
+    db.ref('timetable_data/time_configs').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // แปลงชื่อจาก ป_1 กลับเป็น ป.1 แล้วเก็บลงตัวแปรหลัก
+            for (let key in data) {
+                const originalKey = key.replace(/_/g, '.');
+                timeConfigsByLevel[originalKey] = data[key];
+            }
+            console.log("โหลดโครงสร้างเวลาสำเร็จ");
+        }
+    });
+
+    // 2. ดึงข้อมูลการจัดวิชา (Assignments)
+    db.ref('timetable_assignments').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // เคลียร์ค่าเก่าแล้วดึงค่าใหม่จาก Firebase ใส่ finalSchedule
+            finalSchedule = [];
+            // วนลูปดึงข้อมูลจากโครงสร้าง ห้อง -> วัน -> คาบ
+            for (let room in data) {
+                for (let day in data[room]) {
+                    for (let pKey in data[room][day]) {
+                        finalSchedule.push(data[room][day][pKey]);
+                    }
+                }
+            }
+            console.log("โหลดตารางสอนสำเร็จ");
+            
+            // ถ้าโหลดเสร็จแล้ว ให้สั่งวาดตารางทันที (ถ้าอยู่หน้าตาราง)
+            if (typeof updatePeriodView === "function") updatePeriodView();
+        }
+    });
+}
+
+// --- สั่งให้ทำงานทันทีที่เปิดเว็บ หรือรีเฟรชหน้า ---
+document.addEventListener('DOMContentLoaded', () => {
+    // รอให้ Firebase พร้อมแล้วค่อยโหลดข้อมูล
+    setTimeout(() => {
+        loadTimetableData();
+    }, 1000); 
+});
+
+// ฟังก์ชันสำหรับคอยเฝ้าดูการเปลี่ยนแปลงข้อมูลใน Firebase (Realtime Sync)
+function startSyncingData() {
+    console.log("เริ่มการเชื่อมต่อข้อมูลแบบเรียลไทม์...");
+
+    // 1. ดึงข้อมูลโครงสร้างเวลา (Time Configs)
+    db.ref('timetable_data/time_configs').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // ล้างค่าเก่าและอัปเดตค่าใหม่
+            for (let key in data) {
+                const originalKey = key.replace(/_/g, '.');
+                timeConfigsByLevel[originalKey] = data[key];
+            }
+            if (typeof updatePeriodView === "function") updatePeriodView();
+        }
+    });
+
+    // 2. ดึงข้อมูลการจัดวิชา (Assignments)
+    db.ref('timetable_assignments').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            let newSchedule = [];
+            // วนลูปอ่านข้อมูลจากโครงสร้าง ห้อง -> วัน -> คาบ
+            Object.keys(data).forEach(roomKey => {
+                const roomName = roomKey.replace(/_/g, '.'); // แปลง ป_1 กลับเป็น ป.1
+                Object.keys(data[roomKey]).forEach(day => {
+                    Object.keys(data[roomKey][day]).forEach(pKey => {
+                        newSchedule.push(data[roomKey][day][pKey]);
+                    });
+                });
+            });
+            
+            finalSchedule = newSchedule;
+            
+            // อัปเดตตารางที่แสดงผลอยู่ทันที
+            if (typeof updatePeriodView === "function") updatePeriodView();
+            if (typeof renderMasterTable === "function") renderMasterTable();
+        }
+    });
+}
+
+// เรียกใช้งานฟังก์ชัน Sync ทันทีที่โหลดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', () => {
+    // หน่วงเวลาเล็กน้อยเพื่อให้ Firebase เชื่อมต่อเสร็จ
+    setTimeout(startSyncingData, 1000);
+});
+
+// ฟังก์ชันโหลดข้อมูลทั้งหมด
+function loadAllData() {
+    console.log("กำลังซิงค์ข้อมูลจาก Firebase...");
+
+    // โหลดโครงสร้างเวลา (ป_1 -> ป.1)
+    db.ref('timetable_data/time_configs').on('value', snapshot => {
+        const data = snapshot.val();
+        if (data) {
+            Object.keys(data).forEach(key => {
+                const originalKey = key.replace(/_/g, '.');
+                timeConfigsByLevel[originalKey] = data[key];
+            });
+            updatePeriodView();
+        }
+    });
+
+    // โหลดวิชาที่จัดไว้แล้ว
+    db.ref('timetable_assignments').on('value', snapshot => {
+        const data = snapshot.val();
+        if (data) {
+            let loaded = [];
+            // วนลูปอ่านข้อมูล ห้อง > วัน > คาบ
+            Object.keys(data).forEach(roomKey => {
+                const roomData = data[roomKey];
+                Object.keys(roomData).forEach(day => {
+                    const dayData = roomData[day];
+                    Object.keys(dayData).forEach(pKey => {
+                        loaded.push(dayData[pKey]);
+                    });
+                });
+            });
+            finalSchedule = loaded;
+            updatePeriodView();
+        }
+    });
+}
+
+// เรียกใช้งานเมื่อโหลดหน้าเว็บสำเร็จ
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(loadAllData, 500);
+});
+
+// ฟังก์ชันสำหรับดึงข้อมูลจาก Firebase มาเก็บในเครื่อง
+function syncAllData() {
+    console.log("🔄 กำลังซิงค์ข้อมูลจาก Firebase...");
+
+    // 1. ดึงโครงสร้างเวลาเรียน
+    db.ref('timetable_data/time_configs').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            Object.keys(data).forEach(key => {
+                // แปลง ป_1 กลับเป็น ป.1 เพื่อให้ตรงกับตัวเลือกในหน้าเว็บ
+                const originalKey = key.replace(/_/g, '.');
+                timeConfigsByLevel[originalKey] = data[key];
+            });
+            console.log("✅ โหลดโครงสร้างเวลาสำเร็จ");
+            updatePeriodView(); 
+        }
+    });
+
+    // 2. ดึงข้อมูลวิชาที่จัดไว้แล้ว
+    db.ref('timetable_assignments').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            let tempSchedule = [];
+            // วนลูปดึงข้อมูลจากโครงสร้าง: ห้อง > วัน > คาบ
+            Object.keys(data).forEach(roomKey => {
+                const roomData = data[roomKey];
+                Object.keys(roomData).forEach(day => {
+                    const dayData = roomData[day];
+                    Object.keys(dayData).forEach(pKey => {
+                        tempSchedule.push(dayData[pKey]);
+                    });
+                });
+            });
+            finalSchedule = tempSchedule;
+            console.log("✅ โหลดข้อมูลการจัดคาบสอนสำเร็จ");
+            updatePeriodView();
+        }
+    });
+}
+
+// สั่งให้ทำงานทันทีเมื่อโหลดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(syncAllData, 1000); // หน่วงเวลา 1 วินาทีเพื่อให้ Firebase พร้อม
 });
 
     </script>
