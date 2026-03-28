@@ -1273,16 +1273,50 @@ function exportTableToImage() {
     wrapper.style.padding = '60px'; // ** เพิ่มขอบกระดาษให้ดูโปร่งและแพงขึ้น **
     wrapper.style.backgroundColor = '#ffffff'; // พื้นหลังสีขาวล้วน
     
-    // 4. ลบเงาและขอบมนของหน้าเว็บออก เพื่อให้ภาพแบนราบคมชัดเหมือนเอกสาร
+    // 4. ปรับแต่ง Clone (ปรับตัวหนังสือให้ใหญ่ขึ้น และลบกรอบที่ไม่ต้องการออก)
+    // ลบเงาและขอบมนของคอนเทนเนอร์หลัก
     clone.style.boxShadow = 'none';
     clone.style.border = 'none';
     clone.style.margin = '0';
     clone.style.borderRadius = '0';
+    clone.style.width = '100%';
 
-    // 5. (ทางเลือก) เพิ่ม Footer เล็กๆ ด้านล่างของเอกสาร
+    // --- ส่วนเพิ่มประสิทธิภาพความอ่านง่าย ---
+    
+    // ก) ขยายตัวหนังสือหัวข้อหลัก (เช่น ชั้นประถมศึกษาปีที่...)
+    const title = clone.querySelector('h2, .text-2xl, #full-room-title, #teacher-display-name');
+    if (title) title.style.fontSize = '32px';
+
+    // ข) จัดการกับช่องในตาราง (td) ให้ตัวหนังสือใหญ่ขึ้น
+    const allCells = clone.querySelectorAll('td, th');
+    allCells.forEach(cell => {
+        cell.style.fontSize = '18px'; // เพิ่มขนาดฟอนต์พื้นฐานในตาราง
+        cell.style.padding = '15px';   // เพิ่มระยะห่างให้ดูไม่อึดอัด
+    });
+
+    // ค) **จุดสำคัญ**: ลบกรอบและพื้นหลังที่ชื่อครู/วิชา ให้ดูคลีนตามสั่ง
+    const subBadges = clone.querySelectorAll('.bg-slate-100, .border-slate-200, .rounded, span.inline-flex');
+    subBadges.forEach(badge => {
+        badge.style.backgroundColor = 'transparent'; // ลบสีพื้นหลังออก
+        badge.style.border = 'none';                // ลบเส้นขอบออก
+        badge.style.boxShadow = 'none';             // ลบเงา (ถ้ามี)
+        badge.style.padding = '0';                  // ลบระยะห่างขอบเดิม
+        badge.style.fontSize = '16px';              // ปรับขนาดชื่อครูให้พอดี
+    });
+
+    // ง) ขยายชื่อวิชาให้เด่นชัด
+    const subjectTexts = clone.querySelectorAll('.font-black.text-blue-900, .text-sm.font-black');
+    subjectTexts.forEach(sub => {
+        sub.style.fontSize = '22px'; // ชื่อวิชาใหญ่พิเศษ
+        sub.style.marginBottom = '5px';
+    });
+
+    // 5. เพิ่ม Footer ด้านล่างของเอกสาร
     const footer = document.createElement('div');
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
     footer.innerHTML = `
-        <div style="text-align: right; color: #cbd5e1; font-size: 14px; margin-top: 30px; font-weight: bold; font-family: sans-serif;">
+        <div style="color: #cbd5e1; font-size: 14px; margin-top: 30px; font-weight: bold; font-family: sans-serif;">
             Exported from PSV Timetable System
         </div>
     `;
