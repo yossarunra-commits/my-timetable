@@ -21,8 +21,8 @@ function startSync() {
             console.log("✅ ข้อมูลจาก Cloud มาถึงแล้ว");
             
             // อัปเดตตัวแปรหลัก (ป้องกัน Error ถ้าข้อมูลบางส่วนหาย)
-            appData = cloudData.appData || { teachers: [], subjects: [], rooms: {} };
-            finalSchedule = cloudData.finalSchedule || [];
+           let appData;
+            let finalSchedule;
 
             // 🔥 บังคับวาดหน้าจอใหม่ทันที
             refreshUI();
