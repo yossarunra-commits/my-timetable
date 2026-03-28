@@ -263,13 +263,16 @@
 
             <div class="lg:col-span-8 space-y-6">
                 <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-[2rem] shadow-xl shadow-blue-100">
-                    <div class="bg-white p-6 rounded-[1.8rem] grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-[1.8rem] grid grid-cols-1 md:grid-cols-3 gap-6">
+                        
                         <div class="space-y-2">
                             <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fas fa-door-open text-blue-500"></i> 1. เลือกห้องเรียน
                             </label>
-                            <select id="assign-room" onchange="updatePeriodView()" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-blue-700 outline-none"></select>
+                            <select id="assign-room" onchange="updatePeriodView()" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-blue-700 outline-none">
+                            </select>
                         </div>
+
                         <div class="space-y-2">
                             <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fas fa-calendar-day text-blue-500"></i> 2. เลือกวันสอน
@@ -282,8 +285,22 @@
                                 <option value="ศุกร์">วันศุกร์</option>
                             </select>
                         </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-tshirt text-blue-500"></i> 3. ชุดที่ใส่
+                            </label>
+                            <select id="assign-uniform" onchange="saveUniformToFirebase()" class="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 p-3 rounded-xl font-bold text-amber-600 outline-none">
+                                <option value="ชุดนักเรียน">ชุดนักเรียน</option>
+                                <option value="ชุดพละ">ชุดพละ</option>
+                                <option value="ชุดผ้าไทย">ชุดผ้าไทย</option>
+                                <option value="ชุดไปรเวท">ชุดไปรเวท</option>
+                            </select>
+                        </div>
+
                     </div>
                 </div>
+            
 
                 <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
                     <div class="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
@@ -757,62 +774,66 @@ let currentEditing = { period: null };
 
 // 1. ฟังก์ชันแสดงรายการคาบเรียน (ฝั่งขวา)
 function updatePeriodView() {
-    const roomFull = document.getElementById('assign-room').value; // เช่น "ป.1/1"
+    const roomFull = document.getElementById('assign-room').value;
     const day = document.getElementById('assign-day').value;
     const grid = document.getElementById('period-grid');
+    const uniformSelect = document.getElementById('assign-uniform');
     
-    if (!roomFull || !day || !grid) return;
-
-    grid.innerHTML = "";
-    
-    // ดึงเฉพาะ "ป.1" จาก "ป.1/1"
-    const level = roomFull.split('/')[0]; 
-    const config = timeConfigsByLevel[level];
-
-    if (!config) {
-        grid.innerHTML = `<p class="text-center py-10 text-gray-400">ยังไม่ได้ตั้งเวลาของ ${level}</p>`;
+    // ตรวจสอบความพร้อม หากข้อมูลไม่ครบให้ล้างหน้าจอแล้วหยุดทำงาน
+    if (!roomFull || !day || !grid || roomFull === "") {
+        if (grid) grid.innerHTML = ""; 
         return;
     }
 
-    // แปลงชื่อห้องให้ตรงกับ Path ใน Firebase (ป.1 -> ป_1)
-    const cleanRoom = level.replace(/\./g, '_');
+    // *** จุดสำคัญ: ล้างข้อมูลเก่าทิ้งทุกครั้งก่อนวาดใหม่ เพื่อป้องกันตารางขึ้นซ้ำ ***
+    grid.innerHTML = '<p class="text-center py-10 text-blue-500 animate-pulse font-bold">กำลังโหลดข้อมูล...</p>';
     
-    // ดึงเฉพาะตัวเลขห้อง (เช่น /1) หรือกำหนดเป็นค่าเริ่มต้นถ้าไม่มี
-    const roomNumberMatch = roomFull.match(/\/(\d+)/);
-    const roomNumber = roomNumberMatch ? roomNumberMatch[1] : '1';
+    const level = roomFull.split('/')[0]; 
+    const roomNumber = roomFull.match(/\/(\d+)/)?.[1] || '1';
+    const cleanLevel = level.replace(/\./g, '_');
 
-    // Path อ้างอิงจากรูป Firebase: timetable_assignments -> ป_1 -> 1 -> จันทร์
-    const assignmentsRef = db.ref(`timetable_assignments/${cleanRoom}/${roomNumber}/${day}`);
+    // ดึงข้อมูลจาก Firebase
+    db.ref(`timetable_assignments/${cleanLevel}/${roomNumber}/${day}`).once('value').then((snapshot) => {
+        const dayData = snapshot.val() || {};
+        
+        // ล้างสถานะ Loading ออก
+        grid.innerHTML = ""; 
 
-    // ไปดึงข้อมูลมาจาก Firebase ตรงๆ
-    assignmentsRef.once('value').then((snapshot) => {
-        const assignmentsData = snapshot.val() || {}; // ถ้าไม่มีข้อมูลให้เป็น object ว่าง
+        // 1. อัปเดต Dropdown ชุดแต่งกาย
+        if (uniformSelect) {
+            uniformSelect.value = dayData.uniform || "ชุดนักเรียน";
+        }
 
+        const config = timeConfigsByLevel[level];
+        if (!config || config.length === 0) {
+            grid.innerHTML = `<p class="text-center py-10 text-gray-400">ยังไม่ได้ตั้งเวลาของ ${level}</p>`;
+            return;
+        }
+
+        // 2. วาดรายการคาบเรียน (จะไม่ขึ้นซ้ำแล้วเพราะเราสั่งล้าง grid ไปด้านบน)
         config.forEach(item => {
-            // เช็คว่ามีข้อมูลของคาบนี้ใน Firebase ไหม
             const periodKey = `period_${item.period}`;
-            const saved = assignmentsData[periodKey];
-
+            const saved = dayData[periodKey];
             const isRest = (item.type !== 'teach');
-            const row = document.createElement('div');
             
-            row.className = `flex items-center justify-between p-4 rounded-2xl border mb-2 transition-all ${
-                saved ? 'bg-blue-50 border-blue-200 shadow-sm' : (isRest ? 'bg-gray-50' : 'bg-white border-gray-100')
+            const row = document.createElement('div');
+            row.className = `flex items-center justify-between p-4 rounded-2xl border mb-3 transition-all ${
+                saved ? 'bg-blue-50 border-blue-200' : (isRest ? 'bg-gray-50 border-transparent' : 'bg-white border-gray-100')
             }`;
             
             row.innerHTML = `
                 <div class="flex items-center gap-4">
                     <div class="text-xl font-black ${saved ? 'text-blue-600' : 'text-gray-300'} w-8">${item.period}</div>
                     <div>
-                        <div class="text-[10px] font-bold text-gray-400">${item.start} - ${item.end} น.</div>
+                        <div class="text-[10px] font-bold text-gray-400 uppercase">${item.start} - ${item.end} น.</div>
                         <div class="font-bold text-slate-700">
                             ${isRest ? '<span class="text-orange-400">☕ พักเบรก</span>' : 
-                              (saved ? `<span class="text-blue-700">${saved.subject}</span> <span class="text-slate-400 text-sm ml-2">👤 ครู${saved.teacher}</span>` : 'ว่าง / ยังไม่ได้จัดวิชา')}
+                              (saved ? `<span class="text-blue-700 text-lg">${saved.subject}</span> <span class="text-slate-400 text-sm ml-2">👤 ครู${saved.teacher}</span>` : 'ว่าง / ยังไม่ได้จัดวิชา')}
                         </div>
                     </div>
                 </div>
                 ${isRest ? '' : `
-                    <button onclick="openAssignModal(${item.period})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    <button onclick="openAssignModal(${item.period})" class="px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                         saved ? 'bg-amber-500 text-white shadow-md' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
                     }">
                         ${saved ? 'แก้ไข' : '+ เลือกสอน'}
@@ -821,9 +842,6 @@ function updatePeriodView() {
             `;
             grid.appendChild(row);
         });
-    }).catch((error) => {
-        console.error("Error fetching assignments:", error);
-        grid.innerHTML = `<p class="text-center py-10 text-red-400">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>`;
     });
 }
 
@@ -1142,25 +1160,19 @@ function renderMasterTable() {
     const header = document.getElementById('table-header');
     const body = document.getElementById('table-body');
     
-    const roomShort = roomSelect ? roomSelect.value : ""; // ค่าที่ได้คือ เช่น "ป.1/1"
+    const roomShort = roomSelect ? roomSelect.value : ""; 
     
     if (!roomShort) {
         body.innerHTML = `<tr><td class='p-10 text-center text-slate-300 italic'>กรุณาเลือกห้องเรียน...</td></tr>`;
         return;
     }
 
-    // 1. เตรียมข้อมูลเพื่ออ้างอิง Path ใน Firebase
     const parts = roomShort.split('/'); 
-    const levelName = parts[0]; // "ป.1"
-    const roomNumber = parts[1] || "1"; // "1"
-    
-    // แปลง ป.1 เป็น ป_1 เพื่อใช้เป็น Path ใน Firebase
+    const levelName = parts[0]; 
+    const roomNumber = parts[1] || "1"; 
     const cleanRoomPath = levelName.replace(/\./g, '_'); 
-
-    // ดึง Config เวลาโดยใช้ levelName (ป.1)
     const config = (typeof timeConfigsByLevel !== 'undefined') ? timeConfigsByLevel[levelName] || [] : [];
 
-    // 2. แสดงชื่อหัวตาราง
     const translate = { "ป.": "ชั้นประถมศึกษาปีที่ ", "ม.": "ชั้นมัธยมศึกษาปีที่ " };
     let fullText = roomShort;
     for (let key in translate) {
@@ -1174,11 +1186,9 @@ function renderMasterTable() {
         return;
     }
 
-    // แสดงสถานะกำลังโหลด
     body.innerHTML = `<tr><td colspan="${config.length + 1}" class='p-10 text-center text-blue-500 font-bold animate-pulse'>กำลังโหลดข้อมูล...</td></tr>`;
 
-    // 3. วาดหัวตาราง (ดึงจาก Config)
-    let headerHtml = `<th class="border border-slate-300 p-3 bg-slate-100 text-xs font-black text-slate-600 w-24 rounded-tl-lg">วัน / เวลา</th>`;
+    let headerHtml = `<th class="border border-slate-300 p-3 bg-slate-100 text-xs font-black text-slate-600 w-28 rounded-tl-lg">วัน / ชุดที่ใส่</th>`;
     config.forEach(slot => {
         headerHtml += `
             <th class="border border-slate-300 p-3 text-center bg-amber-50 min-w-[120px] shadow-sm">
@@ -1190,46 +1200,50 @@ function renderMasterTable() {
     });
     header.innerHTML = `<tr>${headerHtml}</tr>`;
 
-    // 4. ดึงข้อมูลจาก Firebase ตรงๆ
-    // เข้าถึง Path: timetable_assignments -> ป_1 -> 1
     const roomRef = db.ref(`timetable_assignments/${cleanRoomPath}/${roomNumber}`);
 
     roomRef.once('value').then((snapshot) => {
-        const roomData = snapshot.val() || {}; // ถ้าไม่มีข้อมูลเลยจะได้ Object ว่าง
-
-        // 5. วาดเนื้อหาตาราง 5 วัน
+        const roomData = snapshot.val() || {}; 
         const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
         body.innerHTML = "";
 
         days.forEach(dayName => {
             const tr = document.createElement('tr');
-            tr.className = "hover:bg-slate-50 transition-colors duration-150 h-24";
+            tr.className = "hover:bg-slate-50 transition-colors duration-150 h-28"; // เพิ่มความสูงเล็กน้อย
             
-            let rowHtml = `<td class="border border-slate-300 p-3 font-bold text-center bg-slate-50 text-slate-700 shadow-sm">${dayName}</td>`;
-
-            // ข้อมูลของวันนั้นๆ (เช่น จันทร์)
             const dayData = roomData[dayName] || {};
+            
+            // --- ส่วนที่เพิ่ม: แสดงชุดที่ใส่ ---
+            const uniform = dayData.uniform || "ชุดนักเรียน"; // ดึงค่า uniform ถ้าไม่มีให้ใส่ชุดนักเรียนเป็นพื้นฐาน
+            let uniformColor = "text-blue-500 bg-blue-50"; // สีเริ่มต้น
+            
+            if (uniform.includes("พละ")) uniformColor = "text-orange-600 bg-orange-50";
+            if (uniform.includes("พื้นเมือง")) uniformColor = "text-pink-600 bg-pink-50";
+            if (uniform.includes("ลูกเสือ")) uniformColor = "text-emerald-700 bg-emerald-50";
+
+            let rowHtml = `
+                <td class="border border-slate-300 p-2 font-bold text-center bg-slate-50 text-slate-700 shadow-sm">
+                    <div class="text-lg mb-1">${dayName}</div>
+                    <div class="text-[9px] py-1 px-1.5 rounded-full border font-black uppercase ${uniformColor} border-current opacity-80">
+                        ${uniform}
+                    </div>
+                </td>`;
+            // ------------------------------
 
             config.forEach(slot => {
-                // ถ้าเป็นเวลาพัก
                 if (slot.type !== 'teach') {
-                    rowHtml += `<td class="border border-slate-300 bg-orange-50/40 text-center uppercase text-[11px] font-black text-orange-500 tracking-widest">พักเบรก</td>`;
-                } 
-                // ถ้าเป็นคาบสอน
-                else {
+                    rowHtml += `<td class="border border-slate-300 bg-orange-50/40 text-center uppercase text-[11px] font-black text-orange-500 tracking-widest italic">พัก</td>`;
+                } else {
                     const periodKey = `period_${slot.period}`;
-                    const match = dayData[periodKey]; // ค้นหาจาก Firebase Data โดยตรง
+                    const match = dayData[periodKey]; 
 
                     if (match) {
                         rowHtml += `
                             <td class="border border-slate-300 p-2 text-center align-middle bg-white hover:bg-blue-50/30 transition-all cursor-default">
-                                <div class="font-black text-blue-800 text-sm mb-1">${match.subject}</div>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                    ครู${match.teacher}
-                                </span>
+                                <div class="font-black text-blue-900 text-[15px] leading-tight mb-1">${match.subject}</div>
+                                <div class="text-[11px] font-bold text-slate-400">ครู${match.teacher}</div>
                             </td>`;
                     } else {
-                        // ช่องว่าง (ยังไม่ได้จัดวิชา)
                         rowHtml += `<td class="border border-slate-300 bg-slate-50/20"></td>`;
                     }
                 }
@@ -1239,14 +1253,13 @@ function renderMasterTable() {
         });
 
     }).catch((error) => {
-        console.error("Error fetching room schedule from Firebase:", error);
-        body.innerHTML = `<tr><td colspan="${config.length + 1}" class='p-10 text-center text-red-500 font-bold'>เกิดข้อผิดพลาดในการโหลดข้อมูลจากฐานข้อมูล</td></tr>`;
+        console.error("Error:", error);
+        body.innerHTML = `<tr><td colspan="${config.length + 1}" class='p-10 text-center text-red-500 font-bold'>Error loading data</td></tr>`;
     });
 }
 
 function exportTableToImage() {
-    // 1. ค้นหา Element ที่ต้องการ (ปรับให้รองรับทั้งหน้าตารางห้องเรียน และหน้าตารางครู)
-    // แนะนำ: ถ้าเป็นไปได้ ให้ไปเพิ่ม id="export-container" ไว้ที่ div ชั้นนอกสุดของตารางเพื่อความแม่นยำ
+    // 1. ค้นหา Element ที่ต้องการ
     const element = document.getElementById('export-container') || 
                     document.querySelector('.bg-white.p-8') || 
                     document.getElementById('teacher-schedule-container');
@@ -1256,104 +1269,113 @@ function exportTableToImage() {
         return;
     }
 
-    // แจ้งเตือนผู้ใช้ระหว่างรอ
     const btn = event ? event.currentTarget : null;
     const originalBtnText = btn ? btn.innerHTML : '';
     if (btn) btn.innerHTML = '<span class="animate-pulse">⏳ กำลังสร้างรูปภาพ...</span>';
 
-    // 2. โคลน Element (ก๊อปปี้) เพื่อนำไปจัดทรงใหม่โดยไม่กระทบหน้าเว็บจริง
+    // 2. โคลน Element
     const clone = element.cloneNode(true);
     
     // 3. สร้าง Wrapper (กระดาษรองหลังสีขาว)
     const wrapper = document.createElement('div');
     wrapper.style.position = 'absolute';
-    wrapper.style.top = '-9999px'; // ซ่อนไว้ไม่ให้ผู้ใช้เห็นตอนกระพริบ
+    wrapper.style.top = '-9999px';
     wrapper.style.left = '-9999px';
-    wrapper.style.width = element.offsetWidth + 'px'; // ล็อกความกว้างให้เท่าหน้าจอเดิม
-    wrapper.style.padding = '60px'; // ** เพิ่มขอบกระดาษให้ดูโปร่งและแพงขึ้น **
-    wrapper.style.backgroundColor = '#ffffff'; // พื้นหลังสีขาวล้วน
+    wrapper.style.width = element.offsetWidth + 'px';
+    wrapper.style.padding = '60px';
+    wrapper.style.backgroundColor = '#ffffff';
     
-    // 4. ปรับแต่ง Clone (ปรับตัวหนังสือให้ใหญ่ขึ้น และลบกรอบที่ไม่ต้องการออก)
-    // ลบเงาและขอบมนของคอนเทนเนอร์หลัก
+    // 4. ปรับแต่ง Clone ให้ตัวหนังสือใหญ่และคลีน
     clone.style.boxShadow = 'none';
     clone.style.border = 'none';
     clone.style.margin = '0';
     clone.style.borderRadius = '0';
     clone.style.width = '100%';
 
-    // --- ส่วนเพิ่มประสิทธิภาพความอ่านง่าย ---
-    
-    // ก) ขยายตัวหนังสือหัวข้อหลัก (เช่น ชั้นประถมศึกษาปีที่...)
-    const title = clone.querySelector('h2, .text-2xl, #full-room-title, #teacher-display-name');
-    if (title) title.style.fontSize = '32px';
+    // ก) ขยายหัวข้อหลัก
+    const mainTitles = clone.querySelectorAll('h2, .text-2xl, #full-room-title, #teacher-display-name, #academic-year');
+    mainTitles.forEach(t => {
+        t.style.fontSize = '38px'; 
+        t.style.fontWeight = '900';
+        t.style.marginBottom = '15px';
+    });
 
-    // ข) จัดการกับช่องในตาราง (td) ให้ตัวหนังสือใหญ่ขึ้น
+    // ข) จัดการกับช่องในตาราง (td, th)
     const allCells = clone.querySelectorAll('td, th');
     allCells.forEach(cell => {
-        cell.style.fontSize = '18px'; // เพิ่มขนาดฟอนต์พื้นฐานในตาราง
-        cell.style.padding = '15px';   // เพิ่มระยะห่างให้ดูไม่อึดอัด
+        if (cell.tagName === 'TH') {
+             cell.style.fontSize = '22px';
+             cell.style.fontWeight = 'bold';
+        } else {
+             cell.style.fontSize = '20px';
+        }
+        cell.style.padding = '22px';
+        cell.style.verticalAlign = 'middle';
     });
 
-    // ค) **จุดสำคัญ**: ลบกรอบและพื้นหลังที่ชื่อครู/วิชา ให้ดูคลีนตามสั่ง
-    const subBadges = clone.querySelectorAll('.bg-slate-100, .border-slate-200, .rounded, span.inline-flex');
+    // ค) ลบกรอบชื่อครู/ห้องเรียน ให้ดูคลีน
+    const subBadges = clone.querySelectorAll('.bg-slate-100, .border-slate-200, .rounded, span.inline-flex, .bg-amber-100, .text-amber-700');
     subBadges.forEach(badge => {
-        badge.style.backgroundColor = 'transparent'; // ลบสีพื้นหลังออก
-        badge.style.border = 'none';                // ลบเส้นขอบออก
-        badge.style.boxShadow = 'none';             // ลบเงา (ถ้ามี)
-        badge.style.padding = '0';                  // ลบระยะห่างขอบเดิม
-        badge.style.fontSize = '16px';              // ปรับขนาดชื่อครูให้พอดี
+        badge.style.backgroundColor = 'transparent';
+        badge.style.border = 'none';
+        badge.style.boxShadow = 'none';
+        badge.style.padding = '0';
+        
+        if (badge.classList.contains('text-amber-700') || badge.innerText.includes('ครู')) {
+            badge.style.fontSize = '18px';
+            badge.style.fontWeight = 'bold';
+        }
     });
 
-    // ง) ขยายชื่อวิชาให้เด่นชัด
-    const subjectTexts = clone.querySelectorAll('.font-black.text-blue-900, .text-sm.font-black');
+    // ง) ปรับแต่งส่วน "ชุดที่ใส่" (เอาวงกลมออกและขยายฟอนต์)
+    // ค้นหา div ที่แสดงชุดที่ใส่ (ปกติจะมี class เกี่ยวกับ text-[9px] หรือ text-[11px])
+    const uniformLabels = clone.querySelectorAll('div.font-black.uppercase, .rounded-full.border');
+    uniformLabels.forEach(label => {
+        label.style.border = 'none';               // เอาวงกลมออก
+        label.style.borderRadius = '0';           // ยกเลิกความมน
+        label.style.backgroundColor = 'transparent'; // ลบสีพื้นหลัง
+        label.style.fontSize = '5px';            // ขยายขนาดชุดที่ใส่ให้ชัดเจน
+        label.style.marginTop = '8px';            // เพิ่มระยะห่างจากชื่อวัน
+        label.style.padding = '0';                // ล้าง padding เดิม
+        label.style.opacity = '1';                // ให้สีเข้มชัดเจน
+    });
+
+    // จ) ขยายชื่อวิชาให้เด่นชัดที่สุด
+    const subjectTexts = clone.querySelectorAll('.font-black.text-blue-900, .text-indigo-900, .text-sm.font-black, div.font-black');
     subjectTexts.forEach(sub => {
-        sub.style.fontSize = '22px'; // ชื่อวิชาใหญ่พิเศษ
-        sub.style.marginBottom = '5px';
+        sub.style.fontSize = '26px'; // ใหญ่พิเศษเพื่อความชัดเจน
+        sub.style.marginBottom = '8px';
+        sub.style.lineHeight = '1.2';
     });
 
-    // 5. เพิ่ม Footer ด้านล่างของเอกสาร
+    // 5. เพิ่ม Footer
     const footer = document.createElement('div');
     footer.style.display = 'flex';
     footer.style.justifyContent = 'flex-end';
-    footer.innerHTML = `
-        <div style="color: #cbd5e1; font-size: 14px; margin-top: 30px; font-weight: bold; font-family: sans-serif;">
-            Exported from PSV Timetable System
-        </div>
-    `;
+    footer.innerHTML = `<div style="color: #cbd5e1; font-size: 14px; margin-top: 30px; font-weight: bold; font-family: sans-serif;">Exported from PSV Timetable System</div>`;
 
-    // ประกอบร่าง
     wrapper.appendChild(clone);
     wrapper.appendChild(footer);
     document.body.appendChild(wrapper);
 
-    // 6. ตั้งค่าการถ่ายภาพให้เป็นโหมด Hi-Res (HD)
+    // 6. ตั้งค่าการถ่ายภาพ Hi-Res
     html2canvas(wrapper, {
-        scale: 3, // อัปเกรดความคมชัดจาก 2 เป็น 3 (ซูมแล้วไม่แตก)
+        scale: 3, 
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false
     }).then(canvas => {
-        // ถ่ายเสร็จ ลบกระดาษจำลองทิ้ง
         document.body.removeChild(wrapper);
-
-        // แปลงเป็นภาพคุณภาพสูงสุด
         const image = canvas.toDataURL("image/png", 1.0);
         
-        // 7. ตั้งชื่อไฟล์อัจฉริยะ (อ่านจากหัวข้อตาราง)
         const roomNameEl = document.getElementById('full-room-title');
         const teacherNameEl = document.getElementById('teacher-display-name');
-        
         let fileName = "ตารางสอน";
-        if (roomNameEl && roomNameEl.innerText) {
-            fileName = roomNameEl.innerText;
-        } else if (teacherNameEl && teacherNameEl.innerText) {
-            fileName = teacherNameEl.innerText;
-        }
+        if (roomNameEl && roomNameEl.innerText) fileName = roomNameEl.innerText;
+        else if (teacherNameEl && teacherNameEl.innerText) fileName = teacherNameEl.innerText;
         
-        // คลีนชื่อไฟล์ไม่ให้มีอักขระแปลกๆ
         const cleanFileName = fileName.replace(/[\/\s]/g, '_').replace('กรุณาระบุชื่อครู', 'ว่าง');
 
-        // สั่งดาวน์โหลด
         const link = document.createElement('a');
         link.download = `${cleanFileName}_2569.png`;
         link.href = image;
@@ -1361,15 +1383,14 @@ function exportTableToImage() {
         link.click();
         document.body.removeChild(link);
 
-        // คืนค่าปุ่ม
         if (btn) btn.innerHTML = originalBtnText;
-
     }).catch(err => {
-        document.body.removeChild(wrapper);
+        if (wrapper.parentNode) document.body.removeChild(wrapper);
         if (btn) btn.innerHTML = originalBtnText;
         alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ: " + err.message);
     });
 }
+
 // ฟังก์ชันดึงรายชื่อห้องเรียนจาก Firebase มาใส่ใน Dropdown อัตโนมัติ
 function updatePreviewRoomDropdown() {
     const select = document.getElementById('preview-room-select');
@@ -2073,6 +2094,26 @@ function syncAllData() {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(syncAllData, 1000); // หน่วงเวลา 1 วินาทีเพื่อให้ Firebase พร้อม
 });
+
+// ฟังก์ชันบันทึกชุดแต่งกายลง Firebase
+function saveUniformToFirebase() {
+    const roomFull = document.getElementById('assign-room').value;
+    const day = document.getElementById('assign-day').value;
+    const uniform = document.getElementById('assign-uniform').value;
+
+    if (!roomFull || !day || roomFull === "") return;
+
+    const level = roomFull.split('/')[0];
+    const roomNumber = roomFull.match(/\/(\d+)/)?.[1] || '1';
+    const cleanLevel = level.replace(/\./g, '_');
+
+    // บันทึกเฉพาะฟิลด์ uniform ไม่ให้ไปทับข้อมูลคาบเรียนอื่น
+    db.ref(`timetable_assignments/${cleanLevel}/${roomNumber}/${day}/uniform`).set(uniform)
+      .then(() => {
+          console.log("บันทึกชุดแต่งกายสำเร็จ");
+          // ไม่ต้องเรียก updatePeriodView() ซ้ำที่นี่ เพื่อป้องกัน UI กระพริบหรือโหลดซ้อน
+      });
+}
 
     </script>
 
