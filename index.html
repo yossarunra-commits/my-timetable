@@ -23,6 +23,31 @@
         box-shadow: none !important; 
     }
 }
+        <style>
+  /* ป้องกันตารางล้นในมือถือ ให้สามารถเลื่อนซ้าย-ขวาได้เฉพาะตัวตาราง */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ปรับขนาดฟอนต์อัตโนมัติตามขนาดหน้าจอ */
+  @media (max-width: 640px) {
+    body { font-size: 14px; }
+    .main-content { padding: 10px; }
+  }
+
+  /* การจัดการ Sidebar ให้ซ่อนอัตโนมัติในมือถือ (ใช้ร่วมกับ JS) */
+  @media (max-width: 1024px) {
+    .sidebar {
+      position: fixed;
+      z-index: 50;
+      left: -100%;
+      transition: 0.3s;
+    }
+    .sidebar.active {
+      left: 0;
+    }
+  } 
     </style>
     
 </head>
