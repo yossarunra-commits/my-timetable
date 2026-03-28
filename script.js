@@ -12,20 +12,20 @@ const database = firebase.database();
 
 // --- 2. Realtime Sync ---
 function startSync() {
-    console.log("🔄 กำลังดึงข้อมูลจาก Cloud...");
-    
     database.ref('timetable').on('value', (snapshot) => {
         const cloudData = snapshot.val();
-        
         if (cloudData) {
-            console.log("✅ ข้อมูลจาก Cloud มาถึงแล้ว");
-            
-            // อัปเดตตัวแปรหลัก (ป้องกัน Error ถ้าข้อมูลบางส่วนหาย)
-           let appData;
-            let finalSchedule;
+            // 1. เอาข้อมูลมาใส่ตัวแปร
+            appData = cloudData.appData;
+            finalSchedule = cloudData.finalSchedule;
 
-            // 🔥 บังคับวาดหน้าจอใหม่ทันที
-            refreshUI();
+            console.log("🔥 ข้อมูลจาก Cloud มาถึงแล้ว!", appData);
+
+            // 2. 🔥 สำคัญมาก: ต้องเรียกฟังก์ชันที่ใช้ "วาดตาราง" ของคุณ
+            // ลองเช็คในไฟล์เดิมดูว่าคุณใช้ชื่อฟังก์ชันอะไร แล้วใส่ให้ตรงกันครับ
+            if (typeof renderSchedule === 'function') renderSchedule();
+            if (typeof renderTeacherTable === 'function') renderTeacherTable();
+            if (typeof updateTeacherList === 'function') updateTeacherList();
         }
     });
 }
