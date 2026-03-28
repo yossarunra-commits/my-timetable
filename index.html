@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="script.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -99,64 +101,71 @@
 
         <main class="flex-1 overflow-y-auto p-4 md:p-8">
             <section id="section-import" class="content-section">
-                <div class="max-w-6xl mx-auto">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-                        <i class="fas fa-cog mr-2 text-blue-600"></i> ตั้งค่าข้อมูลเริ่มต้น
-                    </h2>
+    <div class="max-w-6xl mx-auto">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+            <i class="fas fa-cog mr-2 text-blue-600"></i> ตั้งค่าข้อมูลเริ่มต้น
+        </h2>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-blue-600"><i class="fas fa-user-tie mr-2"></i>รายชื่อครู</h3>
-                                <button onclick="downloadTemplate('teacher')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full shadow-sm border">Template</button>
-                            </div>
-                            <input type="file" id="teacherFile" class="text-sm mb-4 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                            
-                            <div class="table-container border rounded overflow-x-auto">
-                                <table class="w-full text-sm min-w-[400px]" id="teacherTable">
-                                    <thead class="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            <th class="p-2 border text-left">ชื่อ</th>
-                                            <th class="p-2 border text-left">นามสกุล</th>
-                                            <th class="p-2 border text-center">#</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <button onclick="addRow('teacherTable', 3)" class="mt-4 w-full py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-bold">+ เพิ่มครูใหม่</button>
-                        </div>
-
-                        <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-green-600"><i class="fas fa-book mr-2"></i>วิชาหลักและชมรม</h3>
-                                <button onclick="downloadTemplate('subject')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full shadow-sm border">Template</button>
-                            </div>
-                            <input type="file" id="subjectFile" class="text-sm mb-4 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
-                            
-                            <div class="table-container border rounded overflow-x-auto">
-                                <table class="w-full text-sm min-w-[300px]" id="subjectTable">
-                                    <thead class="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            <th class="p-2 border text-left">วิชา/ชมรม</th>
-                                            <th class="p-2 border text-left">ประเภท</th>
-                                            <th class="p-2 border text-center">#</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <button onclick="addRow('subjectTable', 2)" class="mt-4 w-full py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors font-bold">+ เพิ่มวิชาใหม่</button>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border mb-8">
-                        <h3 class="font-bold text-orange-600 mb-4"><i class="fas fa-school mr-2"></i>จำนวนห้องเรียนต่อชั้น</h3>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" id="roomContainer">
-                            </div>
-                    </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-blue-600"><i class="fas fa-user-tie mr-2"></i>รายชื่อครู</h3>
+                    <button onclick="downloadTemplate('teacher')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full shadow-sm border">Template</button>
                 </div>
-            </section>
+                <input type="file" id="teacherFile" class="text-sm mb-4 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                
+                <div class="table-container border rounded overflow-x-auto">
+                    <table class="w-full text-sm min-w-[400px]" id="teacherTable">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="p-2 border text-left">ชื่อ</th>
+                                <th class="p-2 border text-left">นามสกุล</th>
+                                <th class="p-2 border text-center">#</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button onclick="addRow('teacherTable', 3)" class="mt-4 w-full py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-bold">+ เพิ่มครูใหม่</button>
+            </div>
+
+            <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-green-600"><i class="fas fa-book mr-2"></i>วิชาหลักและชมรม</h3>
+                    <button onclick="downloadTemplate('subject')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full shadow-sm border">Template</button>
+                </div>
+                <input type="file" id="subjectFile" class="text-sm mb-4 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                
+                <div class="table-container border rounded overflow-x-auto">
+                    <table class="w-full text-sm min-w-[300px]" id="subjectTable">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="p-2 border text-left">วิชา/ชมรม</th>
+                                <th class="p-2 border text-left">ประเภท</th>
+                                <th class="p-2 border text-center">#</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button onclick="addRow('subjectTable', 2)" class="mt-4 w-full py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors font-bold">+ เพิ่มวิชาใหม่</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border mb-8">
+            <h3 class="font-bold text-orange-600 mb-4"><i class="fas fa-school mr-2"></i>จำนวนห้องเรียนต่อชั้น</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" id="roomContainer"></div>
+        </div>
+
+        <div class="mt-10 mb-20 flex flex-col items-center border-t pt-8">
+            <button onclick="manualSaveData(event)" id="btn-save-firebase"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center text-lg">
+                <i class="fas fa-cloud-upload-alt mr-3"></i> บันทึกข้อมูลเข้า Firebase
+            </button>
+            <p id="save-status-text" class="mt-3 text-sm font-medium text-gray-500"></p>
+        </div>
+    </div>
+</section>
 
         <section id="schedule" class="content-section hidden">
     <div class="max-w-7xl mx-auto px-4">
@@ -1518,6 +1527,84 @@ async function downloadCanvas(element, fileName) {
                 toggleSidebar();
             }
         }
+
+       // ตรวจสอบการ Initialize Firebase (ใช้ Config ของคุณ)
+const firebaseConfig = {
+    apiKey: "AIzaSyBCtIQkl0sS4g5r767LUs5vshAHv9wkbd8",
+    authDomain: "my-timetable-8e9c0.firebaseapp.com",
+    databaseURL: "https://my-timetable-8e9c0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "my-timetable-8e9c0",
+    storageBucket: "my-timetable-8e9c0.firebasestorage.app",
+    messagingSenderId: "838052306956",
+    appId: "1:838052306956:web:077a6c0913419dd7fa4e29",
+    measurementId: "G-P2ZVS9L5ML"
+};
+
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.database();
+
+async function manualSaveData(event) {
+    if (event) event.preventDefault(); // ป้องกันการรีเฟรชหน้าจอ
+
+    const saveBtn = document.getElementById('btn-save-firebase');
+    const statusText = document.getElementById('save-status-text');
+
+    // เปลี่ยนสถานะปุ่มเป็น Loading
+    saveBtn.disabled = true;
+    saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> กำลังบันทึกข้อมูล...';
+    statusText.innerText = "ระบบกำลังอัปโหลดข้อมูลรายชื่อครูและวิชาไปยังฐานข้อมูล...";
+
+    try {
+        // 1. ดึงข้อมูลครูจากตาราง
+        const teachers = [];
+        document.querySelectorAll('#teacherTable tbody tr').forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2 && cells[0].innerText.trim() !== "") {
+                teachers.push({
+                    firstName: cells[0].innerText.trim(),
+                    lastName: cells[1].innerText.trim()
+                });
+            }
+        });
+
+        // 2. ดึงข้อมูลวิชาจากตาราง
+        const subjects = [];
+        document.querySelectorAll('#subjectTable tbody tr').forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2 && cells[0].innerText.trim() !== "") {
+                subjects.push({
+                    subjectName: cells[0].innerText.trim(),
+                    type: cells[1].innerText.trim()
+                });
+            }
+        });
+
+        // 3. บันทึกลง Firebase
+        await db.ref('timetable_settings').set({
+            teachers: teachers,
+            subjects: subjects,
+            lastUpdated: new Date().toLocaleString('th-TH')
+        });
+
+        // บันทึกสำเร็จ
+        statusText.innerHTML = '<span class="text-green-600">✅ บันทึกข้อมูลสำเร็จ! ระบบจำค่าล่าสุดไว้แล้ว</span>';
+        alert("บันทึกข้อมูลเข้าสู่ Firebase เรียบร้อยแล้วครับ!");
+
+    } catch (error) {
+        console.error("Firebase Save Error:", error);
+        statusText.innerHTML = '<span class="text-red-600">❌ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่อีกครั้ง</span>';
+        alert("บันทึกไม่สำเร็จ: " + error.message);
+    } finally {
+        // คืนค่าปุ่ม
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        saveBtn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-3"></i> บันทึกข้อมูลเข้า Firebase';
+    }
+}
+
     </script>
 
 </body>
